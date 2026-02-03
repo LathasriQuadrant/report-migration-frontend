@@ -39,6 +39,9 @@ const migrationSources = [
   },
 ];
 
+const BACKEND_BASE_URL = "https://powerbi-azure-auth-app-e6dtdsb2ccawg9cy.eastus-01.azurewebsites.net";
+const STATIC_WORKSPACE_ID = "1c780154-a538-447a-81a6-dd97636b60dd";
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const [showTableauAuth, setShowTableauAuth] = useState(false);
@@ -49,8 +52,37 @@ const Dashboard = () => {
     sessionStorage.removeItem('selected_workbook');
   }, []);
 
-  const handleSourceClick = (sourceId: string) => {
+  const addServicePrincipalToWorkspace = async () => {
+    try {
+      const response = await fetch(`${BACKEND_BASE_URL}/workspaces/add-sp`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          workspace_id: STATIC_WORKSPACE_ID,
+        }),
+      });
+
+      if (!response.ok) {
+        const result = await response.json();
+        console.error("Failed to add service principal:", result);
+        return false;
+      }
+
+      console.log("Service principal added to workspace successfully");
+      return true;
+    } catch (err) {
+      console.error("Error adding service principal to workspace:", err);
+      return false;
+    }
+  };
+
+  const handleSourceClick = async (sourceId: string) => {
     if (sourceId === 'tableau') {
+      // Call add-sp endpoint before showing auth modal
+      await addServicePrincipalToWorkspace();
       setShowTableauAuth(true);
     } else {
       navigate(`/explore/${sourceId}`);
