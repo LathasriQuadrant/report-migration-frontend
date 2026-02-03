@@ -212,11 +212,45 @@ const DestinationWorkspaceSelection = () => {
     }
   };
 
+  // Add service principal to workspace
+  const addServicePrincipalToWorkspace = async (workspaceId: string): Promise<boolean> => {
+    try {
+      const response = await fetch(`${BACKEND_BASE_URL}/workspaces/add-sp`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          workspace_id: workspaceId,
+        }),
+      });
+
+      if (!response.ok) {
+        const result = await response.json();
+        console.error("Failed to add service principal:", result);
+        // Don't throw - this is a non-blocking operation for now
+        return false;
+      }
+
+      console.log("Service principal added to workspace successfully");
+      return true;
+    } catch (err) {
+      console.error("Error adding service principal to workspace:", err);
+      return false;
+    }
+  };
+
   const handleAutoUpload = async () => {
     if (!selectedWorkspace || !nodeInfo) return;
 
     setIsUploading(true);
     try {
+      // First, add service principal to the workspace (for Tableau migrations)
+      if (sourceId === "tableau") {
+        await addServicePrincipalToWorkspace(selectedWorkspace.id);
+      }
+
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces/${selectedWorkspace.id}/auto-upload`, {
         method: "POST",
         credentials: "include",
