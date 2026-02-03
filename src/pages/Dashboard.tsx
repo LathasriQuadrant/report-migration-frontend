@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileStack, CheckCircle2, Clock, History, BarChart3 } from "lucide-react";
+import { FileStack, CheckCircle2, Clock, History, BarChart3, Loader2 } from "lucide-react";
 import SourceCard from "@/components/dashboard/SourceCard";
 import StatsCard from "@/components/dashboard/StatsCard";
 import { Button } from "@/components/ui/button";
 import AppLayout from "@/components/layout/AppLayout";
 import TableauAuthModal from "@/components/workspace/TableauAuthModal";
 import { TableauIcon, MicroStrategyIcon, SAPBOIcon, CognosIcon } from "@/components/icons/SourceIcons";
+import { useToast } from "@/hooks/use-toast"; // Assuming you use a toast hook
 
 const migrationSources = [
   {
@@ -44,7 +45,9 @@ const STATIC_WORKSPACE_ID = "7add5c6b-2552-4441-8799-838d0dbe3d12";
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [showTableauAuth, setShowTableauAuth] = useState(false);
+  const [isProcessingSP, setIsProcessingSP] = useState(false);
 
   // Clear Power BI session storage when visiting dashboard
   useEffect(() => {
@@ -52,11 +55,16 @@ const Dashboard = () => {
     sessionStorage.removeItem("selected_workbook");
   }, []);
 
+  /**
+   * Calls the FastAPI backend to ensure the Service Principal
+   * is an Admin in the target workspace.
+   */
   const addServicePrincipalToWorkspace = async () => {
+    setIsProcessingSP(true);
     try {
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces/add-sp`, {
         method: "POST",
-        credentials: "include",
+        credentials: "include", // Required to send the session cookie to the backend
         headers: {
           "Content-Type": "application/json",
         },
@@ -65,25 +73,45 @@ const Dashboard = () => {
         }),
       });
 
+      const result = await response.json();
+
       if (!response.ok) {
-        const result = await response.json();
-        console.error("Failed to add service principal:", result);
+        // Handle specific error cases (401 Unauthorized, 404 Not Found, etc.)
+        const errorMsg = result.detail || "Failed to configure workspace permissions";
+        console.error("SP Provisioning Error:", errorMsg);
+
+        toast({
+          variant: "destructive",
+          title: "Workspace Error",
+          description: typeof errorMsg === "string" ? errorMsg : "Check if you are logged in.",
+        });
         return false;
       }
 
-      console.log("Service principal added to workspace successfully");
+      console.log("SP Provisioning Success:", result.message);
       return true;
     } catch (err) {
-      console.error("Error adding service principal to workspace:", err);
+      console.error("Network error adding SP:", err);
+      toast({
+        variant: "destructive",
+        title: "Connection Error",
+        description: "Could not reach the authentication server.",
+      });
       return false;
+    } finally {
+      setIsProcessingSP(false);
     }
   };
 
   const handleSourceClick = async (sourceId: string) => {
     if (sourceId === "tableau") {
-      // Call add-sp endpoint before showing auth modal
-      await addServicePrincipalToWorkspace();
-      setShowTableauAuth(true);
+      // Step 1: Ensure SP is added before showing the modal
+      const success = await addServicePrincipalToWorkspace();
+
+      // Step 2: Only show modal if the SP logic succeeded or SP already existed
+      if (success) {
+        setShowTableauAuth(true);
+      }
     } else {
       navigate(`/explore/${sourceId}`);
     }
@@ -141,15 +169,22 @@ const Dashboard = () => {
           <h2 className="text-base font-semibold text-foreground mb-4">Choose Migration Source</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {migrationSources.map((source) => (
-              <SourceCard
-                key={source.id}
-                sourceId={source.id}
-                title={source.title}
-                description={source.description}
-                icon={source.icon}
-                color={source.color}
-                onClick={() => handleSourceClick(source.id)}
-              />
+              <div key={source.id} className="relative">
+                <SourceCard
+                  sourceId={source.id}
+                  title={source.title}
+                  description={source.description}
+                  icon={source.icon}
+                  color={source.color}
+                  onClick={() => handleSourceClick(source.id)}
+                />
+                {/* Visual indicator when SP is being added */}
+                {source.id === "tableau" && isProcessingSP && (
+                  <div className="absolute inset-0 bg-background/50 flex items-center justify-center rounded-lg">
+                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         </div>
@@ -187,14 +222,10 @@ const Dashboard = () => {
                     <td className="px-5 py-4">
                       <span
                         className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium
-                          ${item.status === "completed" ? "status-completed" : ""}
-                          ${item.status === "running" ? "status-running" : ""}
-                        `}
+                        ${item.status === "completed" ? "status-completed" : "status-running"}`}
                       >
                         <span
-                          className={`w-1.5 h-1.5 rounded-full ${
-                            item.status === "completed" ? "bg-success" : ""
-                          } ${item.status === "running" ? "bg-info pulse-running" : ""}`}
+                          className={`w-1.5 h-1.5 rounded-full ${item.status === "completed" ? "bg-success" : "bg-info animate-pulse"}`}
                         />
                         {item.status === "completed" ? "Completed" : "Running"}
                       </span>
