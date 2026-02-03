@@ -41,7 +41,7 @@ const migrationSources = [
 ];
 
 const BACKEND_BASE_URL = "https://powerbi-azure-auth-app-e6dtdsb2ccawg9cy.eastus-01.azurewebsites.net";
-const STATIC_WORKSPACE_ID = "7add5c6b-2552-4441-8799-838d0dbe3d12";
+const STATIC_WORKSPACE_ID = "1c780154-a538-447a-81a6-dd97636b60dd";
 // This is the Service Principal ID you want Rajashekar to add automatically
 const TARGET_SP_CLIENT_ID = "e2eaa87b-ee2a-4680-9982-870896175cfc";
 
