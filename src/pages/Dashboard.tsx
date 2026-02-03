@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import AppLayout from "@/components/layout/AppLayout";
 import TableauAuthModal from "@/components/workspace/TableauAuthModal";
 import { TableauIcon, MicroStrategyIcon, SAPBOIcon, CognosIcon } from "@/components/icons/SourceIcons";
-import { useToast } from "@/hooks/use-toast"; // Assuming you use a toast hook
+import { useToast } from "@/hooks/use-toast";
 
 const migrationSources = [
   {
@@ -42,6 +42,8 @@ const migrationSources = [
 
 const BACKEND_BASE_URL = "https://powerbi-azure-auth-app-e6dtdsb2ccawg9cy.eastus-01.azurewebsites.net";
 const STATIC_WORKSPACE_ID = "7add5c6b-2552-4441-8799-838d0dbe3d12";
+// This is the Service Principal ID you want Rajashekar to add automatically
+const TARGET_SP_CLIENT_ID = "YOUR_NEW_SP_CLIENT_ID_HERE";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -49,53 +51,54 @@ const Dashboard = () => {
   const [showTableauAuth, setShowTableauAuth] = useState(false);
   const [isProcessingSP, setIsProcessingSP] = useState(false);
 
-  // Clear Power BI session storage when visiting dashboard
   useEffect(() => {
     sessionStorage.removeItem("powerbi_authenticated");
     sessionStorage.removeItem("selected_workbook");
   }, []);
 
   /**
-   * Calls the FastAPI backend to ensure the Service Principal
-   * is an Admin in the target workspace.
+   * BYPASS STRATEGY:
+   * Uses Rajashekar's user token to add the Service Principal.
+   * This avoids the 403 error caused by the Tenant Setting restriction on Apps.
    */
-  const addServicePrincipalToWorkspace = async () => {
+  const addServicePrincipalAsUser = async () => {
     setIsProcessingSP(true);
     try {
-      const response = await fetch(`${BACKEND_BASE_URL}/workspaces/add-sp`, {
+      // Note the endpoint change to /workspaces/add-any-sp
+      const response = await fetch(`${BACKEND_BASE_URL}/workspaces/add-any-sp`, {
         method: "POST",
-        credentials: "include", // Required to send the session cookie to the backend
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           workspace_id: STATIC_WORKSPACE_ID,
+          new_sp_id: TARGET_SP_CLIENT_ID,
         }),
       });
 
       const result = await response.json();
 
       if (!response.ok) {
-        // Handle specific error cases (401 Unauthorized, 404 Not Found, etc.)
-        const errorMsg = result.detail || "Failed to configure workspace permissions";
-        console.error("SP Provisioning Error:", errorMsg);
+        const errorMsg = result.detail || "Power BI rejected the user-delegated request.";
+        console.error("User-Delegate SP Error:", errorMsg);
 
         toast({
           variant: "destructive",
-          title: "Workspace Error",
-          description: typeof errorMsg === "string" ? errorMsg : "Check if you are logged in.",
+          title: "Permission Error",
+          description: "Ensure you are a Workspace Admin and logged in.",
         });
         return false;
       }
 
-      console.log("SP Provisioning Success:", result.message);
+      console.log("SP Provisioning Success (via User Token):", result.message);
       return true;
     } catch (err) {
-      console.error("Network error adding SP:", err);
+      console.error("Network error during User-Delegate add:", err);
       toast({
         variant: "destructive",
         title: "Connection Error",
-        description: "Could not reach the authentication server.",
+        description: "Could not reach the backend server.",
       });
       return false;
     } finally {
@@ -105,10 +108,9 @@ const Dashboard = () => {
 
   const handleSourceClick = async (sourceId: string) => {
     if (sourceId === "tableau") {
-      // Step 1: Ensure SP is added before showing the modal
-      const success = await addServicePrincipalToWorkspace();
+      // Attempt the User-Delegated bypass
+      const success = await addServicePrincipalAsUser();
 
-      // Step 2: Only show modal if the SP logic succeeded or SP already existed
       if (success) {
         setShowTableauAuth(true);
       }
@@ -125,7 +127,6 @@ const Dashboard = () => {
   return (
     <AppLayout>
       <div className="max-w-7xl mx-auto">
-        {/* Page header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-1">
             <h1 className="text-2xl font-semibold text-foreground tracking-tight">Migration Control Center</h1>
@@ -138,7 +139,6 @@ const Dashboard = () => {
           <div className="mt-4 h-px bg-border" />
         </div>
 
-        {/* Stats row */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
           <StatsCard
             title="Total Migrations"
@@ -164,7 +164,6 @@ const Dashboard = () => {
           />
         </div>
 
-        {/* Source selection */}
         <div className="mb-8">
           <h2 className="text-base font-semibold text-foreground mb-4">Choose Migration Source</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -178,7 +177,6 @@ const Dashboard = () => {
                   color={source.color}
                   onClick={() => handleSourceClick(source.id)}
                 />
-                {/* Visual indicator when SP is being added */}
                 {source.id === "tableau" && isProcessingSP && (
                   <div className="absolute inset-0 bg-background/50 flex items-center justify-center rounded-lg">
                     <Loader2 className="w-6 h-6 animate-spin text-primary" />
@@ -189,23 +187,22 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Recent activity */}
         <div className="mt-8">
           <h2 className="text-base font-semibold text-foreground mb-4">Recent Migrations</h2>
           <div className="bg-card rounded-lg border border-border enterprise-shadow overflow-hidden">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
-                  <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-5 py-3">
+                  <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Report
                   </th>
-                  <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-5 py-3">
+                  <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Source
                   </th>
-                  <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-5 py-3">
+                  <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-5 py-3">
+                  <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Date
                   </th>
                 </tr>
@@ -221,8 +218,7 @@ const Dashboard = () => {
                     <td className="px-5 py-4 text-sm text-muted-foreground">{item.source}</td>
                     <td className="px-5 py-4">
                       <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium
-                        ${item.status === "completed" ? "status-completed" : "status-running"}`}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${item.status === "completed" ? "status-completed" : "status-running"}`}
                       >
                         <span
                           className={`w-1.5 h-1.5 rounded-full ${item.status === "completed" ? "bg-success" : "bg-info animate-pulse"}`}
