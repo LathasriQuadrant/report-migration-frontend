@@ -41,10 +41,9 @@ const migrationSources = [
 ];
 
 const BACKEND_BASE_URL = "https://powerbi-azure-auth-app-e6dtdsb2ccawg9cy.eastus-01.azurewebsites.net";
-const STATIC_WORKSPACE_ID = "7add5c6b-2552-4441-8799-838d0dbe3d12";
-
-// YOUR STATIC SERVICE PRINCIPAL CLIENT ID
-const TARGET_SP_CLIENT_ID = "e2eaa87b-ee2a-4680-9982-870896175cfc";
+const STATIC_WORKSPACE_ID = "1c780154-a538-447a-81a6-dd97636b60dd";
+// This is the Service Principal ID you want Rajashekar to add automatically
+const TARGET_SP_CLIENT_ID = "YOUR_NEW_SP_CLIENT_ID_HERE";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -58,16 +57,17 @@ const Dashboard = () => {
   }, []);
 
   /**
-   * ADDS SERVICE PRINCIPAL TO WORKSPACE
-   * This calls the updated backend endpoint that uses Rajashekar's
-   * session token to perform the administrative action.
+   * BYPASS STRATEGY:
+   * Uses Rajashekar's user token to add the Service Principal.
+   * This avoids the 403 error caused by the Tenant Setting restriction on Apps.
    */
   const addServicePrincipalAsUser = async () => {
     setIsProcessingSP(true);
     try {
+      // Note the endpoint change to /workspaces/add-any-sp
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces/add-any-sp`, {
         method: "POST",
-        credentials: "include", // Essential for session-based authentication
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },
@@ -85,20 +85,20 @@ const Dashboard = () => {
 
         toast({
           variant: "destructive",
-          title: "Provisioning Failed",
-          description: typeof errorMsg === "string" ? errorMsg : "Check if you are a Workspace Admin.",
+          title: "Permission Error",
+          description: "Ensure you are a Workspace Admin and logged in.",
         });
         return false;
       }
 
-      console.log("Success: Service Principal linked to workspace via User Token.");
+      console.log("SP Provisioning Success (via User Token):", result.message);
       return true;
     } catch (err) {
       console.error("Network error during User-Delegate add:", err);
       toast({
         variant: "destructive",
         title: "Connection Error",
-        description: "Could not reach the authentication server.",
+        description: "Could not reach the backend server.",
       });
       return false;
     } finally {
@@ -108,7 +108,7 @@ const Dashboard = () => {
 
   const handleSourceClick = async (sourceId: string) => {
     if (sourceId === "tableau") {
-      // Execute the bypass logic
+      // Attempt the User-Delegated bypass
       const success = await addServicePrincipalAsUser();
 
       if (success) {
@@ -127,7 +127,6 @@ const Dashboard = () => {
   return (
     <AppLayout>
       <div className="max-w-7xl mx-auto">
-        {/* Header Section */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-1">
             <h1 className="text-2xl font-semibold text-foreground tracking-tight">Migration Control Center</h1>
@@ -140,7 +139,6 @@ const Dashboard = () => {
           <div className="mt-4 h-px bg-border" />
         </div>
 
-        {/* Stats Section */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
           <StatsCard
             title="Total Migrations"
@@ -166,7 +164,6 @@ const Dashboard = () => {
           />
         </div>
 
-        {/* Source Selection Section */}
         <div className="mb-8">
           <h2 className="text-base font-semibold text-foreground mb-4">Choose Migration Source</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -180,11 +177,9 @@ const Dashboard = () => {
                   color={source.color}
                   onClick={() => handleSourceClick(source.id)}
                 />
-                {/* Visual loading state for the Tableau SP process */}
                 {source.id === "tableau" && isProcessingSP && (
-                  <div className="absolute inset-0 bg-background/50 flex items-center justify-center rounded-lg backdrop-blur-sm">
+                  <div className="absolute inset-0 bg-background/50 flex items-center justify-center rounded-lg">
                     <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                    <span className="ml-2 text-xs font-medium">Provisioning...</span>
                   </div>
                 )}
               </div>
@@ -192,7 +187,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Recent Activity Section */}
         <div className="mt-8">
           <h2 className="text-base font-semibold text-foreground mb-4">Recent Migrations</h2>
           <div className="bg-card rounded-lg border border-border enterprise-shadow overflow-hidden">
