@@ -41,9 +41,7 @@ const migrationSources = [
 ];
 
 const BACKEND_BASE_URL = "https://powerbi-azure-auth-app-e6dtdsb2ccawg9cy.eastus-01.azurewebsites.net";
-const STATIC_WORKSPACE_ID = "1c780154-a538-447a-81a6-dd97636b60dd";
-// This is the Service Principal ID you want Rajashekar to add automatically
-const TARGET_SP_CLIENT_ID = "e2eaa87b-ee2a-4680-9982-870896175cfc";
+const STATIC_WORKSPACE_ID = "7add5c6b-2552-4441-8799-838d0dbe3d12";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -57,48 +55,55 @@ const Dashboard = () => {
   }, []);
 
   /**
-   * BYPASS STRATEGY:
-   * Uses Rajashekar's user token to add the Service Principal.
-   * This avoids the 403 error caused by the Tenant Setting restriction on Apps.
+   * Hits the /workspaces/add-sp endpoint
+   * Payload: { "workspace_id": STATIC_WORKSPACE_ID }
    */
-  const addServicePrincipalAsUser = async () => {
+  const ensureServicePrincipalAccess = async () => {
     setIsProcessingSP(true);
     try {
-      // Note the endpoint change to /workspaces/add-any-sp
-      const response = await fetch(`${BACKEND_BASE_URL}/workspaces/add-any-sp`, {
+      const response = await fetch(`${BACKEND_BASE_URL}/workspaces/add-sp`, {
         method: "POST",
-        credentials: "include",
+        credentials: "include", // Essential for cookie-based session/auth
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           workspace_id: STATIC_WORKSPACE_ID,
-          new_sp_id: TARGET_SP_CLIENT_ID,
         }),
       });
 
       const result = await response.json();
 
       if (!response.ok) {
-        const errorMsg = result.detail || "Power BI rejected the user-delegated request.";
-        console.error("User-Delegate SP Error:", errorMsg);
+        // If Power BI says "Failed to get service principal details from AAD"
+        const errorDetail = result.detail || "Power BI rejected the access request.";
+        console.error("Backend Error:", errorDetail);
 
         toast({
           variant: "destructive",
-          title: "Permission Error",
-          description: "Ensure you are a Workspace Admin and logged in.",
+          title: "Access Verification Failed",
+          description: typeof errorDetail === "string" ? errorDetail : "Check AAD permissions.",
         });
         return false;
       }
 
-      console.log("SP Provisioning Success (via User Token):", result.message);
+      // If already exists or just added, show success
+      console.log("SP Access Verified:", result.message);
+      toast({
+        title: "Access Verified",
+        description:
+          result.message === "already exist"
+            ? "Service Principal already has access."
+            : "Successfully linked Service Principal to workspace.",
+      });
+
       return true;
     } catch (err) {
-      console.error("Network error during User-Delegate add:", err);
+      console.error("Connection Error:", err);
       toast({
         variant: "destructive",
-        title: "Connection Error",
-        description: "Could not reach the backend server.",
+        title: "Network Error",
+        description: "Could not connect to the backend server.",
       });
       return false;
     } finally {
@@ -108,10 +113,11 @@ const Dashboard = () => {
 
   const handleSourceClick = async (sourceId: string) => {
     if (sourceId === "tableau") {
-      // Attempt the User-Delegated bypass
-      const success = await addServicePrincipalAsUser();
+      // 1. Run the backend check for Service Principal Admin access
+      const hasAccess = await ensureServicePrincipalAccess();
 
-      if (success) {
+      // 2. Only show the next modal if the backend successfully linked the SP
+      if (hasAccess) {
         setShowTableauAuth(true);
       }
     } else {
@@ -139,18 +145,19 @@ const Dashboard = () => {
           <div className="mt-4 h-px bg-border" />
         </div>
 
+        {/* Stats Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
           <StatsCard
             title="Total Migrations"
             value="48"
-            change="+12% from last month"
+            change="+12%"
             changeType="positive"
             icon={<FileStack className="w-5 h-5" />}
           />
           <StatsCard
             title="Completed"
             value="42"
-            change="87.5% success rate"
+            change="87.5%"
             changeType="positive"
             icon={<CheckCircle2 className="w-5 h-5" />}
           />
@@ -158,12 +165,13 @@ const Dashboard = () => {
           <StatsCard
             title="Avg. Duration"
             value="4.2m"
-            change="-18% faster"
+            change="-18%"
             changeType="positive"
             icon={<BarChart3 className="w-5 h-5" />}
           />
         </div>
 
+        {/* Source Cards */}
         <div className="mb-8">
           <h2 className="text-base font-semibold text-foreground mb-4">Choose Migration Source</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -178,8 +186,11 @@ const Dashboard = () => {
                   onClick={() => handleSourceClick(source.id)}
                 />
                 {source.id === "tableau" && isProcessingSP && (
-                  <div className="absolute inset-0 bg-background/50 flex items-center justify-center rounded-lg">
-                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                  <div className="absolute inset-0 bg-background/60 flex flex-col items-center justify-center rounded-xl backdrop-blur-[2px] z-10">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary mb-2" />
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
+                      Verifying SP Access
+                    </span>
                   </div>
                 )}
               </div>
@@ -187,48 +198,30 @@ const Dashboard = () => {
           </div>
         </div>
 
+        {/* Recent Activity Table */}
         <div className="mt-8">
           <h2 className="text-base font-semibold text-foreground mb-4">Recent Migrations</h2>
-          <div className="bg-card rounded-lg border border-border enterprise-shadow overflow-hidden">
+          <div className="bg-card rounded-lg border border-border overflow-hidden">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
-                  <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Report
-                  </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Source
-                  </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Date
-                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Report</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Source</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Status</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {[
-                  { name: "Sales Overview Dashboard", source: "Tableau", status: "completed", date: "2 hours ago" },
-                  { name: "Financial KPIs", source: "MicroStrategy", status: "completed", date: "5 hours ago" },
-                  { name: "Customer Analytics", source: "SAP BO", status: "running", date: "Just now" },
-                ].map((item, i) => (
-                  <tr key={i} className="table-row-hover transition-colors">
-                    <td className="px-5 py-4 text-sm font-medium text-foreground">{item.name}</td>
-                    <td className="px-5 py-4 text-sm text-muted-foreground">{item.source}</td>
-                    <td className="px-5 py-4">
-                      <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${item.status === "completed" ? "status-completed" : "status-running"}`}
-                      >
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full ${item.status === "completed" ? "bg-success" : "bg-info animate-pulse"}`}
-                        />
-                        {item.status === "completed" ? "Completed" : "Running"}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4 text-sm text-muted-foreground">{item.date}</td>
-                  </tr>
-                ))}
+                <tr className="hover:bg-muted/10 transition-colors">
+                  <td className="px-5 py-4 text-sm font-medium">Sales Overview</td>
+                  <td className="px-5 py-4 text-sm text-muted-foreground">Tableau</td>
+                  <td className="px-5 py-4">
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                      Completed
+                    </span>
+                  </td>
+                  <td className="px-5 py-4 text-sm text-muted-foreground">2h ago</td>
+                </tr>
               </tbody>
             </table>
           </div>
