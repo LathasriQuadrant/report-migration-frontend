@@ -1,13 +1,12 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileStack, CheckCircle2, Clock, History, BarChart3, Loader2 } from "lucide-react";
+import { FileStack, CheckCircle2, Clock, History, BarChart3 } from "lucide-react";
 import SourceCard from "@/components/dashboard/SourceCard";
 import StatsCard from "@/components/dashboard/StatsCard";
 import { Button } from "@/components/ui/button";
 import AppLayout from "@/components/layout/AppLayout";
 import TableauAuthModal from "@/components/workspace/TableauAuthModal";
 import { TableauIcon, MicroStrategyIcon, SAPBOIcon, CognosIcon } from "@/components/icons/SourceIcons";
-import { useToast } from "@/hooks/use-toast";
 
 const migrationSources = [
   {
@@ -40,86 +39,19 @@ const migrationSources = [
   },
 ];
 
-const BACKEND_BASE_URL = "https://powerbi-azure-auth-app-e6dtdsb2ccawg9cy.eastus-01.azurewebsites.net";
-const STATIC_WORKSPACE_ID = "7add5c6b-2552-4441-8799-838d0dbe3d12";
-
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { toast } = useToast();
   const [showTableauAuth, setShowTableauAuth] = useState(false);
-  const [isProcessingSP, setIsProcessingSP] = useState(false);
 
   useEffect(() => {
     sessionStorage.removeItem("powerbi_authenticated");
     sessionStorage.removeItem("selected_workbook");
   }, []);
 
-  /**
-   * Hits the /workspaces/add-sp endpoint
-   * Payload: { "workspace_id": STATIC_WORKSPACE_ID }
-   */
-  const ensureServicePrincipalAccess = async () => {
-    setIsProcessingSP(true);
-    try {
-      const response = await fetch(`${BACKEND_BASE_URL}/workspaces/add-sp`, {
-        method: "POST",
-        credentials: "include", // Essential for cookie-based session/auth
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          workspace_id: STATIC_WORKSPACE_ID,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        // If Power BI says "Failed to get service principal details from AAD"
-        const errorDetail = result.detail || "Power BI rejected the access request.";
-        console.error("Backend Error:", errorDetail);
-
-        toast({
-          variant: "destructive",
-          title: "Access Verification Failed",
-          description: typeof errorDetail === "string" ? errorDetail : "Check AAD permissions.",
-        });
-        return false;
-      }
-
-      // If already exists or just added, show success
-      console.log("SP Access Verified:", result.message);
-      toast({
-        title: "Access Verified",
-        description:
-          result.message === "already exist"
-            ? "Service Principal already has access."
-            : "Successfully linked Service Principal to workspace.",
-      });
-
-      return true;
-    } catch (err) {
-      console.error("Connection Error:", err);
-      toast({
-        variant: "destructive",
-        title: "Network Error",
-        description: "Could not connect to the backend server.",
-      });
-      return false;
-    } finally {
-      setIsProcessingSP(false);
-    }
-  };
-
-  const handleSourceClick = async (sourceId: string) => {
+  const handleSourceClick = (sourceId: string) => {
     if (sourceId === "tableau") {
-      // 1. Run the backend check for Service Principal Admin access
-      const hasAccess = await ensureServicePrincipalAccess();
-
-      // 2. Only show the next modal if the backend successfully linked the SP
-      if (hasAccess) {
-        setShowTableauAuth(true);
-      }
+      // Directly open Tableau auth modal
+      setShowTableauAuth(true);
     } else {
       navigate(`/explore/${sourceId}`);
     }
@@ -176,29 +108,20 @@ const Dashboard = () => {
           <h2 className="text-base font-semibold text-foreground mb-4">Choose Migration Source</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {migrationSources.map((source) => (
-              <div key={source.id} className="relative">
-                <SourceCard
-                  sourceId={source.id}
-                  title={source.title}
-                  description={source.description}
-                  icon={source.icon}
-                  color={source.color}
-                  onClick={() => handleSourceClick(source.id)}
-                />
-                {source.id === "tableau" && isProcessingSP && (
-                  <div className="absolute inset-0 bg-background/60 flex flex-col items-center justify-center rounded-xl backdrop-blur-[2px] z-10">
-                    <Loader2 className="w-8 h-8 animate-spin text-primary mb-2" />
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-primary">
-                      Verifying SP Access
-                    </span>
-                  </div>
-                )}
-              </div>
+              <SourceCard
+                key={source.id}
+                sourceId={source.id}
+                title={source.title}
+                description={source.description}
+                icon={source.icon}
+                color={source.color}
+                onClick={() => handleSourceClick(source.id)}
+              />
             ))}
           </div>
         </div>
 
-        {/* Recent Activity Table */}
+        {/* Recent Activity */}
         <div className="mt-8">
           <h2 className="text-base font-semibold text-foreground mb-4">Recent Migrations</h2>
           <div className="bg-card rounded-lg border border-border overflow-hidden">
