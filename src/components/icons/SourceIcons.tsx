@@ -32,4 +32,12 @@ export const CognosIcon = ({ className }: IconProps) => (
     <circle cx="12" cy="12" r="3"/>
     <path d="M12 2v4M12 18v4M22 12h-4M6 12H2M19.07 4.93l-2.83 2.83M7.76 16.24l-2.83 2.83M19.07 19.07l-2.83-2.83M7.76 7.76L4.93 4.93" stroke="currentColor" strokeWidth="1.5" fill="none"/>
   </svg>
-);
+ );
+ 
+ export const PowerBIIcon = ({ className }: IconProps) => (
+   <svg viewBox="0 0 24 24" fill="currentColor" className={cn("w-6 h-6", className)}>
+     <rect x="4" y="10" width="4" height="10" rx="1" fill="#F2C811"/>
+     <rect x="10" y="6" width="4" height="14" rx="1" fill="#F2C811"/>
+     <rect x="16" y="2" width="4" height="18" rx="1" fill="#F2C811"/>
+   </svg>
+ );

@@ -457,6 +457,7 @@ const Explorer = () => {
             ? selectedWorkbook?.viewCount || 0
             : selectedNode?.children?.length || 0
         }
+         sourceName={sourceName}
       />
     </AppLayout>
   );
