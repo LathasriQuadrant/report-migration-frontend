@@ -95,21 +95,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return false;
   };
 
-  // Check for local (simulated) authentication
-  const checkLocalAuth = (): boolean => {
+  // Check for session-based authentication (after redirect)
+  const checkSessionAuth = (): boolean => {
+    const isPowerBIAuth = sessionStorage.getItem("powerbi_authenticated") === "true";
     const isLocalAuth = sessionStorage.getItem("local_authenticated") === "true";
-    if (isLocalAuth) {
+    
+    if (isPowerBIAuth || isLocalAuth) {
       const cachedDetails = localStorage.getItem("user_details");
       if (cachedDetails) {
         setUser(JSON.parse(cachedDetails));
-      } else {
+        return true;
+      }
+      // Set minimal user if no cached details
+      const storedName = sessionStorage.getItem("azure_user_name");
+      const storedEmail = sessionStorage.getItem("azure_user_email");
+      if (storedName || storedEmail) {
         setUser({
           id: "1",
-          name: sessionStorage.getItem("azure_user_name") || "User",
-          email: sessionStorage.getItem("azure_user_email") || "",
+          name: storedName || "User",
+          email: storedEmail || "",
         });
+        return true;
       }
-      return true;
     }
     return false;
   };
@@ -119,13 +126,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const initAuth = async () => {
       setIsLoading(true);
 
-      // First check local auth (faster, no network call)
-      if (checkLocalAuth()) {
+      // First check session storage (fastest, no network call)
+      if (checkSessionAuth()) {
         setIsLoading(false);
+        // Still try to refresh user details in background
+        fetchUserDetails().catch(() => {});
         return;
       }
 
-      // Then check Azure AD auth
+      // Then check Azure AD auth via backend
       await checkAuth();
       setIsLoading(false);
     };
