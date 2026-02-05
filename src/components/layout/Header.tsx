@@ -20,8 +20,8 @@ const Header = () => {
     navigate('/login');
   };
 
-  const getInitials = (name: string) => {
-    return name
+  const getInitials = (displayName: string) => {
+    return displayName
       .split(' ')
       .map((n) => n[0])
       .join('')
@@ -49,18 +49,21 @@ const Header = () => {
             <Button variant="ghost" className="gap-2 pl-2 pr-3">
               <Avatar className="w-8 h-8">
                 <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
-                  {user ? getInitials(user.name) : 'U'}
+                  {user ? getInitials(user.displayName) : 'U'}
                 </AvatarFallback>
               </Avatar>
               <span className="text-sm font-medium text-foreground hidden sm:inline">
-                {user?.name}
+                {user?.displayName}
               </span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <div className="px-2 py-1.5">
-              <p className="text-sm font-medium">{user?.name}</p>
-              <p className="text-xs text-muted-foreground">{user?.email}</p>
+              <p className="text-sm font-medium">{user?.displayName}</p>
+              <p className="text-xs text-muted-foreground">{user?.mail}</p>
+              {user?.jobTitle && (
+                <p className="text-xs text-muted-foreground">{user.jobTitle}</p>
+              )}
             </div>
             <DropdownMenuSeparator />
             <DropdownMenuItem>
