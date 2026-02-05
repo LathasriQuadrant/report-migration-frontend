@@ -1,6 +1,7 @@
  import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
  import { Button } from "@/components/ui/button";
- import { BookOpen, LayoutDashboard, FileText, Loader2 } from "lucide-react";
+ import { BookOpen, LayoutDashboard, FileText, Loader2, ArrowRight } from "lucide-react";
+ import { TableauIcon, PowerBIIcon } from "@/components/icons/SourceIcons";
  
  interface MigrationPreviewDialogProps {
    isOpen: boolean;
@@ -10,6 +11,7 @@
    workbookName: string;
    projectName?: string;
    viewCount: number;
+   sourceName?: string;
  }
  
  const MigrationPreviewDialog = ({
@@ -20,6 +22,7 @@
    workbookName,
    projectName,
    viewCount,
+   sourceName = "Tableau",
  }: MigrationPreviewDialogProps) => {
    return (
      <Dialog open={isOpen} onOpenChange={(open) => !open && onCancel()}>
@@ -32,6 +35,30 @@
          </DialogHeader>
  
          <div className="py-4 space-y-4">
+           {/* Source to Destination Flow */}
+           <div className="flex items-center justify-center gap-4 p-4 rounded-lg bg-muted/30">
+             {/* Source */}
+             <div className="flex flex-col items-center text-center">
+               <div className="w-12 h-12 rounded-xl bg-background border border-border flex items-center justify-center mb-2">
+                 <TableauIcon className="w-6 h-6" />
+               </div>
+               <p className="text-xs text-muted-foreground">Source</p>
+               <p className="text-sm font-medium">{sourceName}</p>
+             </div>
+ 
+             {/* Arrow */}
+             <ArrowRight className="w-5 h-5 text-muted-foreground shrink-0" />
+ 
+             {/* Destination */}
+             <div className="flex flex-col items-center text-center">
+               <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-2">
+                 <PowerBIIcon className="w-6 h-6" />
+               </div>
+               <p className="text-xs text-muted-foreground">Destination</p>
+               <p className="text-sm font-medium">Power BI</p>
+             </div>
+           </div>
+ 
            {/* Workbook Info */}
            <div className="p-4 rounded-lg bg-muted/50 border border-border">
              <div className="flex items-start gap-3">
