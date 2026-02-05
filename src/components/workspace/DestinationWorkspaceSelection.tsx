@@ -111,31 +111,18 @@ const DestinationWorkspaceSelection = () => {
       const data = await response.json();
       // Handle both array response and object with workspaces property
       const workspacesList = Array.isArray(data) ? data : data.workspaces || data.value || [];
- 
-       // Fetch datasets for each workspace in parallel
-       const workspacesWithDetails = await Promise.all(
-         workspacesList.map(async (workspace: PowerBIWorkspace) => {
-           try {
-             const datasetsResponse = await fetch(
-               `${BACKEND_BASE_URL}/workspaces/${workspace.id}/datasets`,
-               { credentials: "include" }
-             );
-             
-             if (datasetsResponse.ok) {
-               const datasetsData = await datasetsResponse.json();
-               const datasets = Array.isArray(datasetsData) 
-                 ? datasetsData 
-                 : datasetsData.datasets || datasetsData.value || [];
-               return { ...workspace, datasets };
-             }
-           } catch (err) {
-             console.error(`Failed to fetch datasets for workspace ${workspace.id}:`, err);
-           }
-           return workspace;
-         })
-       );
- 
-       setWorkspaces(workspacesWithDetails);
+       
+       console.log("Workspaces loaded:", workspacesList.length, "workspaces");
+       // Log first workspace to verify structure
+       if (workspacesList.length > 0) {
+         console.log("Sample workspace data:", {
+           name: workspacesList[0].name,
+           reportsCount: workspacesList[0].reports?.length || 0,
+           datasetsCount: workspacesList[0].datasets?.length || 0,
+         });
+       }
+       
+       setWorkspaces(workspacesList);
 
       if (showRefreshToast) {
         toast({ title: "Refreshed", description: "Workspaces list updated" });
