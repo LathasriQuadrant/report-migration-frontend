@@ -103,20 +103,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (isPowerBIAuth || isLocalAuth) {
       const cachedDetails = localStorage.getItem("user_details");
       if (cachedDetails) {
-        setUser(JSON.parse(cachedDetails));
-        return true;
+        try {
+          setUser(JSON.parse(cachedDetails));
+          return true;
+        } catch (e) {
+          // Invalid JSON, continue to fallback
+        }
       }
-      // Set minimal user if no cached details
+      // Set minimal user if no cached details - still authenticated!
       const storedName = sessionStorage.getItem("azure_user_name");
       const storedEmail = sessionStorage.getItem("azure_user_email");
-      if (storedName || storedEmail) {
-        setUser({
-          id: "1",
-          name: storedName || "User",
-          email: storedEmail || "",
-        });
-        return true;
-      }
+      setUser({
+        id: "1",
+        name: storedName || "User",
+        email: storedEmail || "",
+      });
+      return true;
     }
     return false;
   };
