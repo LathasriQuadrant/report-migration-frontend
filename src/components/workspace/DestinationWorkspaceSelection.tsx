@@ -36,6 +36,7 @@ interface PowerBIDataset {
 interface PowerBIWorkspace {
   id: string;
   name: string;
+  type?: string;
   reports?: PowerBIReport[];
   datasets?: PowerBIDataset[];
 }
@@ -71,18 +72,24 @@ const DestinationWorkspaceSelection = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedWorkspace, setSelectedWorkspace] = useState<SelectedPowerBIWorkspace | null>(null);
   const [expandedWorkspaces, setExpandedWorkspaces] = useState<Set<string>>(new Set());
+  const [showMigrationDialog, setShowMigrationDialog] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
 
+  // Get auth state from context
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
+
+  // Auto-upload state
   const [isUploading, setIsUploading] = useState(false);
 
-  // --- API: FETCH WORKSPACES ---
   const fetchWorkspaces = async (showRefreshToast = false) => {
     try {
-      if (showRefreshToast) setIsRefreshing(true);
-      else setIsLoading(true);
+      if (showRefreshToast) {
+        setIsRefreshing(true);
+      } else {
+        setIsLoading(true);
+      }
       setError(null);
 
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces`, {
@@ -90,76 +97,146 @@ const DestinationWorkspaceSelection = () => {
       });
 
       if (response.status === 401) {
+        // Not authenticated - redirect to login
         navigate("/login", { replace: true });
+        setIsLoading(false);
+        setIsRefreshing(false);
         return;
       }
 
-      if (!response.ok) throw new Error("Failed to fetch workspaces");
+      if (!response.ok) {
+        throw new Error("Failed to fetch workspaces");
+      }
 
       const data = await response.json();
-      const workspacesList = Array.isArray(data) ? data : data.workspaces || [];
+      // Handle both array response and object with workspaces property
+      const workspacesList = Array.isArray(data) ? data : data.workspaces || data.value || [];
       setWorkspaces(workspacesList);
 
       if (showRefreshToast) {
         toast({ title: "Refreshed", description: "Workspaces list updated" });
       }
     } catch (err) {
-      setError("Failed to load Power BI workspaces.");
-      toast({ title: "Error", description: "Could not load workspaces", variant: "destructive" });
+      console.error("Error fetching workspaces:", err);
+      setError("Failed to load Power BI workspaces. Please try again.");
+      toast({
+        title: "Error",
+        description: "Could not load Power BI workspaces",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
   };
 
+  // Redirect to login if not authenticated, otherwise fetch workspaces
   useEffect(() => {
-    if (!isAuthLoading && isAuthenticated) fetchWorkspaces();
-    if (!isAuthLoading && !isAuthenticated) navigate("/login", { replace: true });
-  }, [isAuthenticated, isAuthLoading]);
+    if (isAuthLoading) return;
 
-  // --- API: CREATE WORKSPACE ---
+    if (!isAuthenticated) {
+      // Not authenticated - redirect to login
+      navigate("/login", { replace: true });
+      return;
+    }
+
+    // Already authenticated via Azure AD - fetch workspaces
+    fetchWorkspaces();
+  }, [isAuthenticated, isAuthLoading, navigate]);
+
+  const handleRefresh = () => fetchWorkspaces(true);
+
+  const toggleExpand = (workspaceId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedWorkspaces((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(workspaceId)) {
+        newSet.delete(workspaceId);
+      } else {
+        newSet.add(workspaceId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleWorkspaceSelect = (workspace: PowerBIWorkspace) => {
+    setSelectedWorkspace({ id: workspace.id, name: workspace.name });
+  };
+
   const handleCreateWorkspace = async () => {
-    if (!newWorkspaceName.trim()) return;
+    if (!newWorkspaceName.trim()) {
+      toast({
+        title: "Workspace name required",
+        description: "Please enter a workspace name",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       setIsCreatingWorkspace(true);
+
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces`, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspace_name: newWorkspaceName.trim() }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          workspace_name: newWorkspaceName.trim(),
+        }),
       });
 
-      if (!response.ok) throw new Error("Failed to create workspace");
+      const result = await response.json();
 
-      toast({ title: "Success", description: "Workspace created successfully" });
+      if (!response.ok) {
+        throw new Error(result.detail || "Failed to create workspace");
+      }
+
+      toast({
+        title: "Workspace Created",
+        description: `Workspace "${newWorkspaceName}" created successfully`,
+      });
+
       setIsCreateDialogOpen(false);
       setNewWorkspaceName("");
       fetchWorkspaces(true);
     } catch (err) {
-      toast({ title: "Error", description: "Unable to create workspace", variant: "destructive" });
+      toast({
+        title: "Creation Failed",
+        description: err instanceof Error ? err.message : "Unable to create workspace",
+        variant: "destructive",
+      });
     } finally {
       setIsCreatingWorkspace(false);
     }
   };
 
-  // --- API: ADD SERVICE PRINCIPAL (The critical 403 step) ---
+  // Add service principal to workspace
   const addServicePrincipalToWorkspace = async (workspaceId: string): Promise<boolean> => {
     try {
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces/add-sp`, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspace_id: workspaceId }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          workspace_id: workspaceId,
+        }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error("Access Denied (403):", errorData.detail || errorData);
+        const result = await response.json();
+        console.error("Failed to add service principal:", result);
+        // Don't throw - this is a non-blocking operation for now
         return false;
       }
+
+      console.log("Service principal added to workspace successfully");
       return true;
     } catch (err) {
-      console.error("Network error adding SP:", err);
+      console.error("Error adding service principal to workspace:", err);
       return false;
     }
   };
@@ -169,174 +246,365 @@ const DestinationWorkspaceSelection = () => {
 
     setIsUploading(true);
     try {
-      // Step 1: Add Service Principal (Required for automated migrations)
-      const spAdded = await addServicePrincipalToWorkspace(selectedWorkspace.id);
-
-      if (!spAdded) {
-        toast({
-          title: "Permission Warning",
-          description:
-            "Could not add automation agent to workspace. Migration might fail if permissions aren't manualy set.",
-          variant: "destructive",
-        });
+      // First, add service principal to the workspace (for Tableau migrations)
+      if (sourceId === "tableau") {
+        await addServicePrincipalToWorkspace(selectedWorkspace.id);
       }
 
-      // Step 2: Trigger Upload
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces/${selectedWorkspace.id}/auto-upload`, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ report_name: nodeInfo.name }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          report_name: nodeInfo.name,
+        }),
       });
 
-      if (!response.ok) throw new Error("Auto-upload failed");
+      const result = await response.json();
 
-      toast({ title: "Success", description: "Migration started successfully" });
+      if (!response.ok) {
+        throw new Error(result.detail || result.message || "Failed to upload template");
+      }
+
+      console.log("Auto-upload successful:", result);
+
+      sessionStorage.setItem("report_name", nodeInfo.name);
+      sessionStorage.setItem("workspace_id", selectedWorkspace.id);
+      sessionStorage.setItem("workspace_name", selectedWorkspace.name);
+
+      toast({
+        title: "Success",
+        description: `Power BI template uploaded and migration completed for "${selectedWorkspace.name}"`,
+      });
+
+      // Navigate to migration page after successful upload + migration
       navigate(`/migrate/${nodeInfo.id}`, {
-        state: { node: nodeInfo, source: sourceId, workspace: selectedWorkspace },
+        state: {
+          node: nodeInfo,
+          source: sourceId,
+          workspace: selectedWorkspace,
+          // reportId: migrateResult.reportId, // optional but useful
+          // datasetId: migrateResult.datasetId, // optional
+        },
       });
     } catch (err) {
-      toast({ title: "Migration Failed", description: "Check console for details", variant: "destructive" });
+      console.error("Migration error:", err);
+      toast({
+        title: "Migration Failed",
+        description: err instanceof Error ? err.message : "Migration process failed",
+        variant: "destructive",
+      });
     } finally {
       setIsUploading(false);
     }
   };
 
-  const filteredWorkspaces = workspaces.filter((w) => w.name.toLowerCase().includes(searchQuery.toLowerCase()));
-
-  const toggleExpand = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setExpandedWorkspaces((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+  const handleStartMigration = () => {
+    if (selectedWorkspace && nodeInfo) {
+      navigate(`/migrate/${nodeInfo.id}`, {
+        state: {
+          node: nodeInfo,
+          source: sourceId,
+          workspace: selectedWorkspace,
+        },
+      });
+    }
   };
 
-  if (isAuthLoading)
-    return (
-      <div className="p-20 text-center">
-        <Loader2 className="animate-spin mx-auto" />
-      </div>
-    );
+  const filteredWorkspaces = workspaces.filter((w) => w.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
+  // Show loading while checking auth
+  if (isAuthLoading || (!isAuthenticated && !isLoading)) {
+    return (
+      <AppLayout>
+        <div className="max-w-3xl mx-auto text-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Checking authentication...</p>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (!nodeInfo) {
+    return (
+      <AppLayout>
+        <div className="max-w-3xl mx-auto text-center py-12">
+          <p className="text-muted-foreground">No report selected. Please go back and select a report.</p>
+          <Button variant="outline" onClick={() => navigate("/")} className="mt-4">
+            Back to Dashboard
+          </Button>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // ===================== RENDER =====================
   return (
     <AppLayout>
-      <div className="max-w-7xl mx-auto h-full flex flex-col p-4">
-        {/* Header Section */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" onClick={() => navigate(-1)}>
+      <div className="max-w-7xl mx-auto h-full flex flex-col">
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4 flex-shrink-0">
+          <button onClick={() => navigate("/")} className="hover:text-foreground transition-colors">
+            Dashboard
+          </button>
+          <ChevronRight className="w-4 h-4" />
+          <button onClick={() => navigate(-1)} className="hover:text-foreground transition-colors">
+            {sourceName} Explorer
+          </button>
+          <ChevronRight className="w-4 h-4" />
+          <span className="text-foreground font-medium">Select Destination</span>
+        </div>
+
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">Select Destination</h1>
-              <p className="text-sm text-muted-foreground">Target Workspace for {nodeInfo?.name}</p>
+              <h1 className="text-xl font-bold">Power BI Workspaces</h1>
+              <p className="text-sm text-muted-foreground">Select destination for "{nodeInfo.name}"</p>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setIsCreateDialogOpen(true)}>
-              + New Workspace
+
+          <div className="flex items-center gap-2">
+            <Button variant="powerbi" size="sm" onClick={() => setIsCreateDialogOpen(true)}>
+              + Create Workspace
             </Button>
-            <Button variant="outline" onClick={() => fetchWorkspaces(true)} disabled={isRefreshing}>
-              <RefreshCw className={isRefreshing ? "animate-spin" : ""} />
+
+            <Button variant={viewMode === "grid" ? "secondary" : "ghost"} size="sm" onClick={() => setViewMode("grid")}>
+              <LayoutGrid className="w-4 h-4" />
             </Button>
-            <div className="flex border rounded-md">
-              <Button
-                variant={viewMode === "grid" ? "secondary" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("grid")}
-              >
-                <LayoutGrid className="w-4 h-4" />
-              </Button>
-              <Button
-                variant={viewMode === "tree" ? "secondary" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("tree")}
-              >
-                <List className="w-4 h-4" />
-              </Button>
-            </div>
+            <Button variant={viewMode === "tree" ? "secondary" : "ghost"} size="sm" onClick={() => setViewMode("tree")}>
+              <List className="w-4 h-4" />
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
           </div>
         </div>
 
-        {/* Search Bar */}
-        <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search workspaces..."
-            className="pl-10"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-
-        {/* Content Area */}
-        <div className="flex-1 overflow-y-auto bg-white rounded-xl border border-slate-200 shadow-sm">
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center h-64">
-              <Loader2 className="animate-spin text-primary w-8 h-8" />
+        {/* Loading State */}
+        {isLoading && (
+          <div className="bg-card rounded-xl border border-border enterprise-shadow flex-1 flex items-center justify-center">
+            <div className="flex flex-col items-center justify-center py-16">
+              <Loader2 className="w-8 h-8 animate-spin text-primary mb-3" />
+              <p className="text-sm text-muted-foreground">Loading Power BI workspaces...</p>
             </div>
-          ) : (
-            <div className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-3 gap-4 p-4" : "flex flex-col p-2"}>
-              {filteredWorkspaces.map((ws) => (
-                <div
-                  key={ws.id}
-                  onClick={() => setSelectedWorkspace({ id: ws.id, name: ws.name })}
-                  className={`cursor-pointer border rounded-lg p-4 transition-all ${
-                    selectedWorkspace?.id === ws.id
-                      ? "border-blue-600 bg-blue-50 ring-1 ring-blue-600"
-                      : "hover:bg-slate-50"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <FolderOpen className="text-blue-500 w-5 h-5" />
-                    <span className="font-semibold text-slate-700 truncate">{ws.name}</span>
-                  </div>
-                  <div className="mt-2 text-xs text-slate-500">
-                    {ws.reports?.length || 0} Reports • {ws.datasets?.length || 0} Datasets
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* Action Footer */}
-        {selectedWorkspace && (
-          <div className="mt-4 p-4 border-t flex justify-between items-center bg-slate-50 rounded-lg">
-            <p className="text-sm">
-              Selected: <span className="font-bold">{selectedWorkspace.name}</span>
-            </p>
-            <Button
-              size="lg"
-              onClick={handleAutoUpload}
-              disabled={isUploading}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              {isUploading ? <Loader2 className="animate-spin mr-2" /> : null}
-              Migrate to Power BI
-            </Button>
+        {/* Error State */}
+        {error && !isLoading && (
+          <div className="bg-card rounded-xl border border-border enterprise-shadow flex-1 flex items-center justify-center">
+            <div className="text-center py-16">
+              <p className="text-destructive text-sm">{error}</p>
+              <Button variant="outline" onClick={handleRefresh} className="mt-4">
+                Try Again
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!isLoading && !error && workspaces.length === 0 && isAuthenticated && (
+          <div className="bg-card rounded-xl border border-border enterprise-shadow flex-1 flex items-center justify-center">
+            <div className="text-center py-16">
+              <FolderOpen className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+              <p className="text-muted-foreground text-sm">No Power BI workspaces found for your account.</p>
+            </div>
+          </div>
+        )}
+
+        {/* GRID VIEW */}
+        {!isLoading && !error && workspaces.length > 0 && viewMode === "grid" && (
+          <div className="bg-card rounded-xl border border-border enterprise-shadow flex-1 flex flex-col min-h-0">
+            <div className="p-3 border-b border-border flex-shrink-0">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search workspaces..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+            <div className="p-4 flex-1 overflow-y-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {filteredWorkspaces.map((workspace) => (
+                  <button
+                    key={workspace.id}
+                    onClick={() => handleWorkspaceSelect(workspace)}
+                    className={`p-4 rounded-lg border text-left ${
+                      selectedWorkspace?.id === workspace.id
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:bg-muted/50"
+                    }`}
+                  >
+                    <FolderOpen className="w-5 h-5 mb-2 text-primary" />
+                    <p className="font-medium text-sm">{workspace.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {workspace.reports?.length || 0} reports • {workspace.datasets?.length || 0} datasets
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {selectedWorkspace && (
+              <div className="p-4 border-t border-border flex justify-end flex-shrink-0">
+                <Button variant="powerbi" size="lg" onClick={handleAutoUpload} disabled={isUploading}>
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Uploading Template...
+                    </>
+                  ) : (
+                    "Migrate to Power BI"
+                  )}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+        {/* TREE VIEW */}
+        {!isLoading && !error && workspaces.length > 0 && viewMode === "tree" && (
+          <div className="bg-card rounded-xl border border-border enterprise-shadow flex-1 flex flex-col min-h-0">
+            <div className="p-3 border-b border-border flex-shrink-0">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search workspaces..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              <div className="py-2">
+                {filteredWorkspaces.map((workspace) => {
+                  const isExpanded = expandedWorkspaces.has(workspace.id);
+                  const isSelected = selectedWorkspace?.id === workspace.id;
+                  const reports = workspace.reports || [];
+                  const datasets = workspace.datasets || [];
+                  const hasContent = reports.length > 0 || datasets.length > 0;
+
+                  return (
+                    <div key={workspace.id}>
+                      <button
+                        onClick={() => handleWorkspaceSelect(workspace)}
+                        className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors hover:bg-accent/50 ${
+                          isSelected ? "bg-accent text-accent-foreground font-medium" : ""
+                        }`}
+                        style={{ paddingLeft: "12px" }}
+                      >
+                        <span className="w-4 h-4 flex items-center justify-center shrink-0">
+                          {hasContent && (
+                            <button
+                              onClick={(e) => toggleExpand(workspace.id, e)}
+                              className="hover:bg-muted rounded p-0.5"
+                            >
+                              {isExpanded ? (
+                                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                              )}
+                            </button>
+                          )}
+                        </span>
+                        <FolderOpen className="w-4 h-4 text-primary" />
+                        <span className="truncate">{workspace.name}</span>
+                        <span className="ml-auto text-xs text-muted-foreground">Workspace</span>
+                      </button>
+
+                      {/* Expanded content */}
+                      {isExpanded && hasContent && (
+                        <div className="tree-expand">
+                          {/* Reports */}
+                          {reports.map((report) => (
+                            <div
+                              key={report.id}
+                              className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground"
+                              style={{ paddingLeft: "44px" }}
+                            >
+                              <FileText className="w-4 h-4 text-success" />
+                              <span className="truncate">{report.name}</span>
+                              <span className="ml-auto text-xs">Report</span>
+                            </div>
+                          ))}
+                          {/* Datasets */}
+                          {datasets.map((dataset) => (
+                            <div
+                              key={dataset.id}
+                              className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground"
+                              style={{ paddingLeft: "44px" }}
+                            >
+                              <Database className="w-4 h-4 text-info" />
+                              <span className="truncate">{dataset.name}</span>
+                              <span className="ml-auto text-xs">Dataset</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {selectedWorkspace && (
+              <div className="p-4 border-t border-border flex justify-end">
+                <Button variant="powerbi" size="lg" onClick={handleAutoUpload} disabled={isUploading}>
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Uploading Template...
+                    </>
+                  ) : (
+                    "Migrate to Power BI"
+                  )}
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Create Workspace Dialog */}
+      {/* Migration Summary Dialog */}
+      <MigrationSummaryDialog
+        open={showMigrationDialog}
+        onOpenChange={setShowMigrationDialog}
+        sourceNode={nodeInfo}
+        sourceName={sourceName}
+        destinationWorkspace={selectedWorkspace}
+        onConfirm={handleStartMigration}
+      />
+
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create Workspace</DialogTitle>
+            <DialogTitle>Create Power BI Workspace</DialogTitle>
           </DialogHeader>
+
           <Input
-            placeholder="Enter name"
+            placeholder="Enter workspace name"
             value={newWorkspaceName}
             onChange={(e) => setNewWorkspaceName(e.target.value)}
+            autoFocus
           />
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleCreateWorkspace} disabled={isCreatingWorkspace}>
+            <Button variant="powerbi" onClick={handleCreateWorkspace} disabled={isCreatingWorkspace}>
               {isCreatingWorkspace ? "Creating..." : "Create"}
             </Button>
           </DialogFooter>

@@ -240,8 +240,7 @@ const Login = () => {
               </div>
               <span className="text-lg font-semibold text-foreground">ReportFlow</span>
             </div>
-
-            {/* Card Container - Compact height */}
+            /* {/* Card Container - Compact height */}
             <div className="bg-card rounded-xl border border-border enterprise-shadow-lg p-6">
               <div className="text-center mb-5">
                 <h2 className="text-xl font-semibold text-foreground mb-1">
@@ -250,8 +249,8 @@ const Login = () => {
                 <p className="text-sm text-muted-foreground">
                   {isLoginView ? "Sign in to continue to ReportFlow" : "Register to get started with ReportFlow"}
                 </p>
-              </div>
-
+              </div>{" "}
+              */
               {/* Azure AD waiting state */}
               {isWaiting ? (
                 <div className="text-center space-y-4 py-4">
@@ -400,7 +399,6 @@ const Login = () => {
                 </>
               )}
             </div>
-
             {/* Toggle text outside the container */}
             {!isWaiting && (
               <p className="mt-5 text-center text-sm text-muted-foreground">
@@ -429,7 +427,6 @@ const Login = () => {
                 )}
               </p>
             )}
-
             <p className="mt-4 text-center text-xs text-muted-foreground">
               By signing in, you agree to our Terms of Service and Privacy Policy.
             </p>
