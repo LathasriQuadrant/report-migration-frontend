@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileStack, CheckCircle2, Clock, History, BarChart3 } from "lucide-react";
+import { FileStack, CheckCircle2, History, LayoutGrid } from "lucide-react";
 import SourceCard from "@/components/dashboard/SourceCard";
 import StatsCard from "@/components/dashboard/StatsCard";
 import { Button } from "@/components/ui/button";
@@ -78,7 +78,7 @@ const Dashboard = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-8">
           <StatsCard
             title="Total Migrations"
             value="48"
@@ -87,19 +87,18 @@ const Dashboard = () => {
             icon={<FileStack className="w-5 h-5" />}
           />
           <StatsCard
-            title="Completed"
-            value="42"
-            change="87.5%"
+            title="Migration Status"
+            value="42 / 3"
+            change="42 completed, 3 in progress"
             changeType="positive"
             icon={<CheckCircle2 className="w-5 h-5" />}
           />
-          <StatsCard title="In Progress" value="3" icon={<Clock className="w-5 h-5" />} />
           <StatsCard
-            title="Avg. Duration"
-            value="4.2m"
-            change="-18%"
-            changeType="positive"
-            icon={<BarChart3 className="w-5 h-5" />}
+            title="Total Assets"
+            value="156"
+            change="84 sheets, 42 dashboards, 30 workbooks"
+            changeType="neutral"
+            icon={<LayoutGrid className="w-5 h-5" />}
           />
         </div>
 

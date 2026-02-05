@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Shield, Zap, Clock, ArrowLeft, ExternalLink, Loader2, Mail, UserPlus } from "lucide-react";
+import { Shield, Zap, Clock, ArrowLeft, ExternalLink, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const BACKEND_BASE_URL = "https://powerbi-azure-auth-app-e6dtdsb2ccawg9cy.eastus-01.azurewebsites.net";
@@ -14,15 +12,6 @@ const Login = () => {
   const { isAuthenticated, checkAuth } = useAuth();
   const [isWaiting, setIsWaiting] = useState(false);
   const [loginWindow, setLoginWindow] = useState<Window | null>(null);
-
-  // Form state
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [name, setName] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState("");
-  const [isLoginView, setIsLoginView] = useState(true);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -70,73 +59,6 @@ const Login = () => {
     setIsWaiting(true);
     const newWindow = window.open(LOGIN_URL, "_blank", "noopener");
     setLoginWindow(newWindow);
-  };
-
-  // Clear form when switching views
-  const switchView = (toLogin: boolean) => {
-    setIsLoginView(toLogin);
-    setError("");
-    setEmail("");
-    setPassword("");
-    setConfirmPassword("");
-    setName("");
-  };
-
-  // Email/password login handler (simulated - does not use Azure AD checkAuth)
-  const handleEmailLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setIsSubmitting(true);
-
-    try {
-      // Simulated login delay
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // Store user info for simulated session
-      sessionStorage.setItem("azure_user_name", email.split("@")[0]);
-      sessionStorage.setItem("azure_user_email", email);
-      sessionStorage.setItem("local_authenticated", "true");
-
-      navigate("/dashboard", { replace: true });
-    } catch (err) {
-      setError("Invalid email or password. Please try again.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // Registration handler (simulated - does not use Azure AD checkAuth)
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
-      return;
-    }
-
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      // Simulated registration delay
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // Store user info for simulated session
-      sessionStorage.setItem("azure_user_name", name || email.split("@")[0]);
-      sessionStorage.setItem("azure_user_email", email);
-      sessionStorage.setItem("local_authenticated", "true");
-
-      navigate("/dashboard", { replace: true });
-    } catch (err) {
-      setError("Registration failed. Please try again.");
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
   return (
@@ -240,17 +162,16 @@ const Login = () => {
               </div>
               <span className="text-lg font-semibold text-foreground">ReportFlow</span>
             </div>
-            /* {/* Card Container - Compact height */}
+
+            {/* Card Container */}
             <div className="bg-card rounded-xl border border-border enterprise-shadow-lg p-6">
               <div className="text-center mb-5">
-                <h2 className="text-xl font-semibold text-foreground mb-1">
-                  {isLoginView ? "Welcome Back" : "Create Account"}
-                </h2>
+                <h2 className="text-xl font-semibold text-foreground mb-1">Welcome</h2>
                 <p className="text-sm text-muted-foreground">
-                  {isLoginView ? "Sign in to continue to ReportFlow" : "Register to get started with ReportFlow"}
+                  Sign in to continue to ReportFlow
                 </p>
-              </div>{" "}
-              */
+              </div>
+
               {/* Azure AD waiting state */}
               {isWaiting ? (
                 <div className="text-center space-y-4 py-4">
@@ -274,122 +195,8 @@ const Login = () => {
                 </div>
               ) : (
                 <>
-                  {/* Login Form */}
-                  {isLoginView ? (
-                    <form onSubmit={handleEmailLogin} className="space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="email">Email</Label>
-                        <Input
-                          id="email"
-                          type="email"
-                          placeholder="you@example.com"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="password">Password</Label>
-                        <Input
-                          id="password"
-                          type="password"
-                          placeholder="••••••••"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          required
-                        />
-                      </div>
-                      {error && <p className="text-sm text-destructive">{error}</p>}
-                      <Button type="submit" className="w-full" disabled={isSubmitting}>
-                        {isSubmitting ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Signing in...
-                          </>
-                        ) : (
-                          <>
-                            <Mail className="w-4 h-4 mr-2" />
-                            Login
-                          </>
-                        )}
-                      </Button>
-                    </form>
-                  ) : (
-                    /* Register Form */
-                    <form onSubmit={handleRegister} className="space-y-3">
-                      <div className="space-y-1.5">
-                        <Label htmlFor="register-name">Full Name</Label>
-                        <Input
-                          id="register-name"
-                          type="text"
-                          placeholder="John Doe"
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="register-email">Email</Label>
-                        <Input
-                          id="register-email"
-                          type="email"
-                          placeholder="you@example.com"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="register-password">Password</Label>
-                        <Input
-                          id="register-password"
-                          type="password"
-                          placeholder="••••••••"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="confirm-password">Confirm Password</Label>
-                        <Input
-                          id="confirm-password"
-                          type="password"
-                          placeholder="••••••••"
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          required
-                        />
-                      </div>
-                      {error && <p className="text-sm text-destructive">{error}</p>}
-                      <Button type="submit" className="w-full" disabled={isSubmitting}>
-                        {isSubmitting ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Creating account...
-                          </>
-                        ) : (
-                          <>
-                            <UserPlus className="w-4 h-4 mr-2" />
-                            Register
-                          </>
-                        )}
-                      </Button>
-                    </form>
-                  )}
-
-                  {/* Divider */}
-                  <div className="relative my-5">
-                    <div className="absolute inset-0 flex items-center">
-                      <span className="w-full border-t border-border" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
-                    </div>
-                  </div>
-
                   {/* Azure AD SSO Button */}
-                  <Button variant="azure" className="w-full h-10" onClick={handleAzureSignIn}>
+                  <Button variant="azure" className="w-full h-11" onClick={handleAzureSignIn}>
                     <svg className="w-5 h-5 mr-2" viewBox="0 0 21 21" fill="none">
                       <path d="M10 0v10h10V0H10zm0 11v10h10V11H10zM0 0v10h9V0H0zm0 11v10h9V11H0z" fill="currentColor" />
                     </svg>
@@ -399,34 +206,7 @@ const Login = () => {
                 </>
               )}
             </div>
-            {/* Toggle text outside the container */}
-            {!isWaiting && (
-              <p className="mt-5 text-center text-sm text-muted-foreground">
-                {isLoginView ? (
-                  <>
-                    Don't have an account?{" "}
-                    <button
-                      type="button"
-                      onClick={() => switchView(false)}
-                      className="text-primary hover:underline font-medium"
-                    >
-                      Register
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    Already have an account?{" "}
-                    <button
-                      type="button"
-                      onClick={() => switchView(true)}
-                      className="text-primary hover:underline font-medium"
-                    >
-                      Sign in
-                    </button>
-                  </>
-                )}
-              </p>
-            )}
+
             <p className="mt-4 text-center text-xs text-muted-foreground">
               By signing in, you agree to our Terms of Service and Privacy Policy.
             </p>
