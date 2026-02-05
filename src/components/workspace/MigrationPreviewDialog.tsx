@@ -43,7 +43,8 @@
                  <TableauIcon className="w-6 h-6" />
                </div>
                <p className="text-xs text-muted-foreground">Source</p>
-               <p className="text-sm font-medium">{sourceName}</p>
+               <p className="text-sm font-medium max-w-[100px] truncate" title={workbookName}>{workbookName}</p>
+               <p className="text-xs text-muted-foreground">{sourceName}</p>
              </div>
  
              {/* Arrow */}
@@ -55,22 +56,8 @@
                  <PowerBIIcon className="w-6 h-6" />
                </div>
                <p className="text-xs text-muted-foreground">Destination</p>
-               <p className="text-sm font-medium">Power BI</p>
-             </div>
-           </div>
- 
-           {/* Workbook Info */}
-           <div className="p-4 rounded-lg bg-muted/50 border border-border">
-             <div className="flex items-start gap-3">
-               <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                 <BookOpen className="w-5 h-5 text-primary" />
-               </div>
-               <div>
-                 <p className="font-medium text-foreground">{workbookName}</p>
-                 {projectName && (
-                   <p className="text-sm text-muted-foreground">{projectName}</p>
-                 )}
-               </div>
+               <p className="text-sm font-medium text-muted-foreground italic">Select next →</p>
+               <p className="text-xs text-muted-foreground">Power BI</p>
              </div>
            </div>
  
