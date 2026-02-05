@@ -58,6 +58,8 @@ export interface User {
   email: string;
   avatar?: string;
   role?: "admin" | "user";
+  jobTitle?: string;
+  preferredLanguage?: string;
 }
 
 // ==============================

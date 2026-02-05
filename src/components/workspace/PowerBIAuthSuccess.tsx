@@ -5,22 +5,26 @@ import { useAuth } from "@/contexts/AuthContext";
 
 /**
  * This page handles the callback from Azure AD authentication.
- * Automatically redirects to dashboard after successful auth.
+  * Immediately calls /user/me to fetch user details, then redirects to dashboard.
  */
 const PowerBIAuthSuccess = () => {
   const navigate = useNavigate();
   const { checkAuth } = useAuth();
   const [isVerifying, setIsVerifying] = useState(true);
+  const [statusMessage, setStatusMessage] = useState("Verifying authentication...");
 
   useEffect(() => {
     const verifyAndRedirect = async () => {
       // Mark as authenticated in session storage
       sessionStorage.setItem("powerbi_authenticated", "true");
       
-      // Verify auth with backend and update context
+      setStatusMessage("Fetching your profile...");
+      
+      // Verify auth with backend - this now calls /user/me first
       await checkAuth();
       
       setIsVerifying(false);
+      setStatusMessage("Welcome! Redirecting to dashboard...");
       
       // Redirect to dashboard after short delay
       setTimeout(() => {
@@ -45,9 +49,7 @@ const PowerBIAuthSuccess = () => {
           {isVerifying ? "Verifying..." : "Authentication Successful"}
         </h2>
         <p className="text-muted-foreground">
-          {isVerifying 
-            ? "Please wait while we verify your credentials..."
-            : "Redirecting to dashboard..."}
+          {statusMessage}
         </p>
       </div>
     </div>
