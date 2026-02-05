@@ -9,7 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
  */
 const PowerBIAuthSuccess = () => {
   const navigate = useNavigate();
-  const { checkAuth } = useAuth();
+  const { fetchUserDetails } = useAuth();
   const [isVerifying, setIsVerifying] = useState(true);
 
   useEffect(() => {
@@ -17,8 +17,12 @@ const PowerBIAuthSuccess = () => {
       // Mark as authenticated in session storage
       sessionStorage.setItem("powerbi_authenticated", "true");
       
-      // Verify auth with backend and update context
-      await checkAuth();
+      // Immediately fetch user details from /user/me endpoint
+      const userDetails = await fetchUserDetails();
+      
+      if (userDetails) {
+        console.log("User authenticated:", userDetails.name);
+      }
       
       setIsVerifying(false);
       
@@ -29,7 +33,7 @@ const PowerBIAuthSuccess = () => {
     };
     
     verifyAndRedirect();
-  }, [checkAuth, navigate]);
+  }, [fetchUserDetails, navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
