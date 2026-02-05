@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Search, RefreshCw, ChevronRight, LayoutGrid, List, BookOpen, Loader2 } from "lucide-react";
+ import { ArrowLeft, Search, RefreshCw, ChevronRight, LayoutGrid, List, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import TreeView from "@/components/explorer/TreeView";
@@ -9,7 +9,6 @@ import { sampleTableauTree } from "@/data/sampleTree";
 import { TreeNode } from "@/types/migration";
 import { buildTableauTree } from "@/data/tableauTreeMapper";
 import { useToast } from "@/hooks/use-toast";
-import MigrationPreviewDialog from "@/components/workspace/MigrationPreviewDialog";
 
 const sourceNames: Record<string, string> = {
   tableau: "Tableau",
@@ -37,9 +36,6 @@ const Explorer = () => {
   const [workbooks, setWorkbooks] = useState<WorkbookItem[]>([]);
   const [viewMode, setViewMode] = useState<"grid" | "tree">("grid");
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isMigrating, setIsMigrating] = useState(false);
-  const [showMigrationPreview, setShowMigrationPreview] = useState(false);
-  const [pendingMigrationType, setPendingMigrationType] = useState<"workbook" | "node" | null>(null);
 
   const sourceName = sourceNames[sourceId || ""] || "Unknown";
 
@@ -126,23 +122,10 @@ const Explorer = () => {
   };
 
   // ---------------- Navigation ----------------
-  const handleShowMigrationPreview = (type: "workbook" | "node") => {
-    setPendingMigrationType(type);
-    setShowMigrationPreview(true);
-  };
-
-  const handleConfirmMigration = async () => {
-    if (pendingMigrationType === "workbook") {
-      await executeWorkbookMigration();
-    } else if (pendingMigrationType === "node") {
-      await executeNodeMigration();
-    }
-  };
-
-  const executeWorkbookMigration = async () => {
-    if (!selectedWorkbook) return;
-
-    const findNode = (nodes: TreeNode[]): TreeNode | null => {
+   const handleMigrateWorkbook = () => {
+     if (!selectedWorkbook) return;
+ 
+     const findNode = (nodes: TreeNode[]): TreeNode | null => {
       for (const node of nodes) {
         if (node.id === selectedWorkbook.id) return node;
         if (node.children) {
@@ -155,7 +138,6 @@ const Explorer = () => {
 
     const workbookNode = findNode(treeData);
     if (workbookNode) {
-      setShowMigrationPreview(false);
       // Store workbook data in session storage
       const workbookData = {
         id: selectedWorkbook.id,
@@ -164,82 +146,17 @@ const Explorer = () => {
         viewCount: selectedWorkbook.viewCount,
       };
       sessionStorage.setItem("selected_workbook", JSON.stringify(workbookData));
-
-      // Call download APIs
-      const apiToken = sessionStorage.getItem("tableau_api_token");
-      if (apiToken) {
-        setIsMigrating(true);
-        try {
-          // Download workbook to Azure Blob Storage
-          const downloadResponse = await fetch(
-            "https://tableau-backend-app-hrdxfhfpghf3f0bg.eastus-01.azurewebsites.net/tableau/download_workbook",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                api_token: apiToken,
-                workbook_id: selectedWorkbook.id,
-                file_name: `${selectedWorkbook.name}.twbx`,
-              }),
-            },
-          );
-
-          if (!downloadResponse.ok) {
-            throw new Error("Failed to upload workbook to Azure Blob Storage");
-          }
-
-          // Download workbook datasources
-          await fetch(
-            "https://tableau-backend-app-hrdxfhfpghf3f0bg.eastus-01.azurewebsites.net/tableau/download_workbook_datasources",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                api_token: apiToken,
-                workbook_id: selectedWorkbook.id,
-              }),
-            },
-          );
-
-          // Extract datasets from the uploaded workbook
-          const extractResponse = await fetch(
-            "https://dataset-extraction-b0erfxbtereygmgz.eastus-01.azurewebsites.net/extract-data",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                blob_path: `${selectedWorkbook.name}.twbx`,
-              }),
-            },
-          );
-
-          if (!extractResponse.ok) {
-            throw new Error("Failed to extract datasets from workbook");
-          }
-
-          // Navigate directly to workspace selection without Azure modal
-          navigate("/workspace-selection", {
-            state: { node: workbookNode, source: sourceId },
-          });
-        } catch (err: any) {
-          console.error("Migration API error:", err);
-          toast({
-            title: "Migration Failed",
-            description: err.message || "Could not complete migration preparation",
-            variant: "destructive",
-          });
-        } finally {
-          setIsMigrating(false);
-        }
-      }
+ 
+       // Navigate directly to workspace selection
+       navigate("/workspace-selection", {
+         state: { node: workbookNode, source: sourceId },
+       });
     }
   };
 
-  const executeNodeMigration = async () => {
-    if (!selectedNode) return;
-
-    setShowMigrationPreview(false);
-    
+   const handleMigrateNode = () => {
+     if (!selectedNode) return;
+ 
     // Store selected node data in session storage
     const nodeData = {
       id: selectedNode.id,
@@ -247,77 +164,6 @@ const Explorer = () => {
       type: selectedNode.type,
     };
     sessionStorage.setItem("selected_workbook", JSON.stringify(nodeData));
-
-    // Call download APIs if it's a workbook
-    if (selectedNode.type === "workbook") {
-      const apiToken = sessionStorage.getItem("tableau_api_token");
-      if (apiToken) {
-        setIsMigrating(true);
-        try {
-          // Download workbook to Azure Blob Storage
-          const downloadResponse = await fetch(
-            "https://tableau-backend-app-hrdxfhfpghf3f0bg.eastus-01.azurewebsites.net/tableau/download_workbook",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                api_token: apiToken,
-                workbook_id: selectedNode.id,
-                file_name: `${selectedNode.name}.twbx`,
-              }),
-            },
-          );
-
-          if (!downloadResponse.ok) {
-            throw new Error("Failed to upload workbook to Azure Blob Storage");
-          }
-
-          // Download workbook datasources
-          await fetch(
-            "https://tableau-backend-app-hrdxfhfpghf3f0bg.eastus-01.azurewebsites.net/tableau/download_workbook_datasources",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                api_token: apiToken,
-                workbook_id: selectedNode.id,
-              }),
-            },
-          );
-
-          // Extract datasets from the uploaded workbook
-          const extractResponse = await fetch(
-            "https://dataset-extraction-b0erfxbtereygmgz.eastus-01.azurewebsites.net/extract-data",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                blob_path: `${selectedNode.name}.twbx`,
-              }),
-            },
-          );
-
-          if (!extractResponse.ok) {
-            throw new Error("Failed to extract datasets from workbook");
-          }
-
-          // Navigate directly to workspace selection without Azure modal
-          navigate("/workspace-selection", {
-            state: { node: selectedNode, source: sourceId },
-          });
-        } catch (err: any) {
-          console.error("Migration API error:", err);
-          toast({
-            title: "Migration Failed",
-            description: err.message || "Could not complete migration preparation",
-            variant: "destructive",
-          });
-        } finally {
-          setIsMigrating(false);
-        }
-        return;
-      }
-    }
 
     // Navigate directly to workspace selection without Azure modal
     navigate("/workspace-selection", {
@@ -399,7 +245,7 @@ const Explorer = () => {
 
             {selectedWorkbook && (
               <div className="p-4 border-t border-border flex justify-end flex-shrink-0">
-                <Button variant="powerbi" size="lg" onClick={() => handleShowMigrationPreview("workbook")}>
+                 <Button variant="powerbi" size="lg" onClick={handleMigrateWorkbook}>
                   Migrate to Power BI
                 </Button>
               </div>
@@ -424,7 +270,7 @@ const Explorer = () => {
 
             {selectedNode && (
               <div className="p-4 border-t border-border flex justify-end flex-shrink-0">
-                <Button variant="powerbi" size="lg" onClick={() => handleShowMigrationPreview("node")}>
+                 <Button variant="powerbi" size="lg" onClick={handleMigrateNode}>
                   Migrate to Power BI
                 </Button>
               </div>
@@ -432,33 +278,6 @@ const Explorer = () => {
           </div>
         )}
       </div>
-
-      {/* Migration Preview Dialog */}
-      <MigrationPreviewDialog
-        isOpen={showMigrationPreview}
-        onConfirm={handleConfirmMigration}
-        onCancel={() => {
-          setShowMigrationPreview(false);
-          setPendingMigrationType(null);
-        }}
-        isLoading={isMigrating}
-        workbookName={
-          pendingMigrationType === "workbook"
-            ? selectedWorkbook?.name || ""
-            : selectedNode?.name || ""
-        }
-        projectName={
-          pendingMigrationType === "workbook"
-            ? selectedWorkbook?.projectName
-            : undefined
-        }
-        viewCount={
-          pendingMigrationType === "workbook"
-            ? selectedWorkbook?.viewCount || 0
-            : selectedNode?.children?.length || 0
-        }
-         sourceName={sourceName}
-      />
     </AppLayout>
   );
 };
