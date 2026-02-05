@@ -164,6 +164,7 @@ const Explorer = () => {
           body: JSON.stringify({
             api_token: token,
             workbook_id: selectedWorkbook.id,
+            name: `${selectedWorkbook.name}.twbx`,
           }),
         }
       );
@@ -270,6 +271,7 @@ const Explorer = () => {
           body: JSON.stringify({
             api_token: token,
             workbook_id: selectedNode.id,
+            name: `${selectedNode.name}.twbx`,
           }),
         }
       );
