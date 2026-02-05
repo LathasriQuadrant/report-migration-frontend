@@ -1,6 +1,6 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Building2, LogOut, Bell, Settings, User } from 'lucide-react';
+import { Building2, LogOut, Settings, User } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   DropdownMenu,
@@ -39,11 +39,6 @@ const Header = () => {
       </Link>
 
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="w-5 h-5 text-muted-foreground" />
-          <span className="absolute top-2 right-2 w-2 h-2 bg-destructive rounded-full" />
-        </Button>
-
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="gap-2 pl-2 pr-3">

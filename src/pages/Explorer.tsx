@@ -9,6 +9,7 @@ import { sampleTableauTree } from "@/data/sampleTree";
 import { TreeNode } from "@/types/migration";
 import { buildTableauTree } from "@/data/tableauTreeMapper";
 import { useToast } from "@/hooks/use-toast";
+import MigrationPreviewDialog from "@/components/workspace/MigrationPreviewDialog";
 
 const sourceNames: Record<string, string> = {
   tableau: "Tableau",
@@ -37,6 +38,8 @@ const Explorer = () => {
   const [viewMode, setViewMode] = useState<"grid" | "tree">("grid");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
+  const [showMigrationPreview, setShowMigrationPreview] = useState(false);
+  const [pendingMigrationType, setPendingMigrationType] = useState<"workbook" | "node" | null>(null);
 
   const sourceName = sourceNames[sourceId || ""] || "Unknown";
 
@@ -123,7 +126,20 @@ const Explorer = () => {
   };
 
   // ---------------- Navigation ----------------
-  const handleWorkbookMigrate = async () => {
+  const handleShowMigrationPreview = (type: "workbook" | "node") => {
+    setPendingMigrationType(type);
+    setShowMigrationPreview(true);
+  };
+
+  const handleConfirmMigration = async () => {
+    if (pendingMigrationType === "workbook") {
+      await executeWorkbookMigration();
+    } else if (pendingMigrationType === "node") {
+      await executeNodeMigration();
+    }
+  };
+
+  const executeWorkbookMigration = async () => {
     if (!selectedWorkbook) return;
 
     const findNode = (nodes: TreeNode[]): TreeNode | null => {
@@ -139,6 +155,7 @@ const Explorer = () => {
 
     const workbookNode = findNode(treeData);
     if (workbookNode) {
+      setShowMigrationPreview(false);
       // Store workbook data in session storage
       const workbookData = {
         id: selectedWorkbook.id,
@@ -218,9 +235,11 @@ const Explorer = () => {
     }
   };
 
-  const handleNodeMigrate = async () => {
+  const executeNodeMigration = async () => {
     if (!selectedNode) return;
 
+    setShowMigrationPreview(false);
+    
     // Store selected node data in session storage
     const nodeData = {
       id: selectedNode.id,
@@ -380,15 +399,8 @@ const Explorer = () => {
 
             {selectedWorkbook && (
               <div className="p-4 border-t border-border flex justify-end flex-shrink-0">
-                <Button variant="powerbi" size="lg" onClick={handleWorkbookMigrate} disabled={isMigrating}>
-                  {isMigrating ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Preparing Migration...
-                    </>
-                  ) : (
-                    "Migrate to Power BI"
-                  )}
+                <Button variant="powerbi" size="lg" onClick={() => handleShowMigrationPreview("workbook")}>
+                  Migrate to Power BI
                 </Button>
               </div>
             )}
@@ -412,21 +424,40 @@ const Explorer = () => {
 
             {selectedNode && (
               <div className="p-4 border-t border-border flex justify-end flex-shrink-0">
-                <Button variant="powerbi" size="lg" onClick={handleNodeMigrate} disabled={isMigrating}>
-                  {isMigrating ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Preparing Migration...
-                    </>
-                  ) : (
-                    "Migrate to Power BI"
-                  )}
+                <Button variant="powerbi" size="lg" onClick={() => handleShowMigrationPreview("node")}>
+                  Migrate to Power BI
                 </Button>
               </div>
             )}
           </div>
         )}
       </div>
+
+      {/* Migration Preview Dialog */}
+      <MigrationPreviewDialog
+        isOpen={showMigrationPreview}
+        onConfirm={handleConfirmMigration}
+        onCancel={() => {
+          setShowMigrationPreview(false);
+          setPendingMigrationType(null);
+        }}
+        isLoading={isMigrating}
+        workbookName={
+          pendingMigrationType === "workbook"
+            ? selectedWorkbook?.name || ""
+            : selectedNode?.name || ""
+        }
+        projectName={
+          pendingMigrationType === "workbook"
+            ? selectedWorkbook?.projectName
+            : undefined
+        }
+        viewCount={
+          pendingMigrationType === "workbook"
+            ? selectedWorkbook?.viewCount || 0
+            : selectedNode?.children?.length || 0
+        }
+      />
     </AppLayout>
   );
 };
