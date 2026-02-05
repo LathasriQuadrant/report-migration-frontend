@@ -1,12 +1,15 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileStack, CheckCircle2, Clock, History, BarChart3 } from "lucide-react";
+import { FileStack, CheckCircle2, Clock, History, BarChart3, Loader2 } from "lucide-react";
 import SourceCard from "@/components/dashboard/SourceCard";
 import StatsCard from "@/components/dashboard/StatsCard";
 import { Button } from "@/components/ui/button";
 import AppLayout from "@/components/layout/AppLayout";
 import TableauAuthModal from "@/components/workspace/TableauAuthModal";
 import { TableauIcon, MicroStrategyIcon, SAPBOIcon, CognosIcon } from "@/components/icons/SourceIcons";
+
+const BACKEND_BASE_URL = "https://powerbi-azure-auth-app-e6dtdsb2ccawg9cy.eastus-01.azurewebsites.net";
+const STATIC_WORKSPACE_ID = "1c780154-a538-447a-81a6-dd97636b60dd";
 
 const migrationSources = [
   {
@@ -42,15 +45,42 @@ const migrationSources = [
 const Dashboard = () => {
   const navigate = useNavigate();
   const [showTableauAuth, setShowTableauAuth] = useState(false);
+  const [isAddingSP, setIsAddingSP] = useState(false);
+
+  // Add service principal to workspace
+  const addServicePrincipalToWorkspace = async (): Promise<boolean> => {
+    try {
+      const response = await fetch(`${BACKEND_BASE_URL}/workspaces/add-sp`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspace_id: STATIC_WORKSPACE_ID }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Add SP failed:", errorData.detail || errorData);
+        return false;
+      }
+      console.log("Service Principal added successfully");
+      return true;
+    } catch (err) {
+      console.error("Network error adding SP:", err);
+      return false;
+    }
+  };
 
   useEffect(() => {
     sessionStorage.removeItem("powerbi_authenticated");
     sessionStorage.removeItem("selected_workbook");
   }, []);
 
-  const handleSourceClick = (sourceId: string) => {
+  const handleSourceClick = async (sourceId: string) => {
     if (sourceId === "tableau") {
-      // Directly open Tableau auth modal
+      // Call add-sp endpoint before opening Tableau auth modal
+      setIsAddingSP(true);
+      await addServicePrincipalToWorkspace();
+      setIsAddingSP(false);
       setShowTableauAuth(true);
     } else {
       navigate(`/explore/${sourceId}`);
