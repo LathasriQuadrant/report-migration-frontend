@@ -1,11 +1,17 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { User } from "@/types/migration";
 
+interface UserDetails extends User {
+  jobTitle?: string;
+  preferredLanguage?: string;
+}
+
 interface AuthContextType {
-  user: User | null;
+  user: UserDetails | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   checkAuth: () => Promise<boolean>;
+  fetchUserDetails: () => Promise<UserDetails | null>;
   logout: () => void;
 }
 
@@ -14,26 +20,71 @@ const BACKEND_BASE_URL = "https://powerbi-azure-auth-app-e6dtdsb2ccawg9cy.eastus
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<UserDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Check Azure AD authentication status by calling the backend
+  // Fetch user details from /user/me endpoint
+  const fetchUserDetails = async (): Promise<UserDetails | null> => {
+    try {
+      const response = await fetch(`${BACKEND_BASE_URL}/user/me`, {
+        credentials: "include",
+      });
+
+      if (response.ok) {
+        const userData = await response.json();
+        const userDetails: UserDetails = {
+          id: userData.id || "1",
+          name: userData.displayName || "User",
+          email: userData.mail || "",
+          jobTitle: userData.jobTitle,
+          preferredLanguage: userData.preferredLanguage,
+        };
+
+        // Store in localStorage for persistence
+        localStorage.setItem("user_details", JSON.stringify(userDetails));
+        localStorage.setItem("user_id", userDetails.id);
+        localStorage.setItem("user_email", userDetails.email);
+        
+        // Also store in sessionStorage for backward compatibility
+        sessionStorage.setItem("azure_user_name", userDetails.name);
+        sessionStorage.setItem("azure_user_email", userDetails.email);
+        sessionStorage.setItem("powerbi_authenticated", "true");
+
+        setUser(userDetails);
+        return userDetails;
+      }
+    } catch (error) {
+      console.error("Failed to fetch user details:", error);
+    }
+    return null;
+  };
+
+  // Check Azure AD authentication status
   const checkAuth = async (): Promise<boolean> => {
     try {
+      // First try to fetch user details directly
+      const userDetails = await fetchUserDetails();
+      if (userDetails) {
+        return true;
+      }
+
+      // Fallback: check workspaces endpoint
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces`, {
         credentials: "include",
       });
 
       if (response.ok) {
-        // User is authenticated via Azure AD
-        const storedName = sessionStorage.getItem("azure_user_name");
-        const storedEmail = sessionStorage.getItem("azure_user_email");
-
-        setUser({
-          id: "1",
-          name: storedName || "User",
-          email: storedEmail || "",
-        });
+        // Try to load cached user details
+        const cachedDetails = localStorage.getItem("user_details");
+        if (cachedDetails) {
+          setUser(JSON.parse(cachedDetails));
+        } else {
+          setUser({
+            id: "1",
+            name: sessionStorage.getItem("azure_user_name") || "User",
+            email: sessionStorage.getItem("azure_user_email") || "",
+          });
+        }
         sessionStorage.setItem("powerbi_authenticated", "true");
         return true;
       }
@@ -48,20 +99,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const checkLocalAuth = (): boolean => {
     const isLocalAuth = sessionStorage.getItem("local_authenticated") === "true";
     if (isLocalAuth) {
-      const storedName = sessionStorage.getItem("azure_user_name");
-      const storedEmail = sessionStorage.getItem("azure_user_email");
-
-      setUser({
-        id: "1",
-        name: storedName || "User",
-        email: storedEmail || "",
-      });
+      const cachedDetails = localStorage.getItem("user_details");
+      if (cachedDetails) {
+        setUser(JSON.parse(cachedDetails));
+      } else {
+        setUser({
+          id: "1",
+          name: sessionStorage.getItem("azure_user_name") || "User",
+          email: sessionStorage.getItem("azure_user_email") || "",
+        });
+      }
       return true;
     }
     return false;
   };
 
-  // Check auth on mount - try local first, then Azure AD
+  // Check auth on mount
   useEffect(() => {
     const initAuth = async () => {
       setIsLoading(true);
@@ -85,11 +138,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem("local_authenticated");
     sessionStorage.removeItem("azure_user_name");
     sessionStorage.removeItem("azure_user_email");
-    // Optionally call backend logout endpoint
+    localStorage.removeItem("user_details");
+    localStorage.removeItem("user_id");
+    localStorage.removeItem("user_email");
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, checkAuth, logout }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, checkAuth, fetchUserDetails, logout }}>
       {children}
     </AuthContext.Provider>
   );
