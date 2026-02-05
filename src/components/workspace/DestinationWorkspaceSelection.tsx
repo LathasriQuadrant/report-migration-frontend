@@ -458,7 +458,7 @@ const DestinationWorkspaceSelection = () => {
 
             {selectedWorkspace && (
               <div className="p-4 border-t border-border flex justify-end flex-shrink-0">
-                <Button variant="powerbi" size="lg" onClick={handleAutoUpload} disabled={isUploading}>
+                 <Button variant="powerbi" size="lg" onClick={() => setShowMigrationDialog(true)} disabled={isUploading}>
                   {isUploading ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -561,7 +561,7 @@ const DestinationWorkspaceSelection = () => {
 
             {selectedWorkspace && (
               <div className="p-4 border-t border-border flex justify-end">
-                <Button variant="powerbi" size="lg" onClick={handleAutoUpload} disabled={isUploading}>
+                 <Button variant="powerbi" size="lg" onClick={() => setShowMigrationDialog(true)} disabled={isUploading}>
                   {isUploading ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -584,7 +584,8 @@ const DestinationWorkspaceSelection = () => {
         sourceNode={nodeInfo}
         sourceName={sourceName}
         destinationWorkspace={selectedWorkspace}
-        onConfirm={handleStartMigration}
+         onConfirm={handleAutoUpload}
+         isLoading={isUploading}
       />
 
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
