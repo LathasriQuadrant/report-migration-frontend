@@ -9,6 +9,7 @@ import { sampleTableauTree } from "@/data/sampleTree";
 import { TreeNode } from "@/types/migration";
 import { buildTableauTree } from "@/data/tableauTreeMapper";
 import { useToast } from "@/hooks/use-toast";
+import { Loader2 } from "lucide-react";
 
 const sourceNames: Record<string, string> = {
   tableau: "Tableau",
@@ -36,6 +37,7 @@ const Explorer = () => {
   const [workbooks, setWorkbooks] = useState<WorkbookItem[]>([]);
   const [viewMode, setViewMode] = useState<"grid" | "tree">("grid");
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isMigrating, setIsMigrating] = useState(false);
 
   const sourceName = sourceNames[sourceId || ""] || "Unknown";
 
@@ -122,10 +124,10 @@ const Explorer = () => {
   };
 
   // ---------------- Navigation ----------------
-   const handleMigrateWorkbook = () => {
-     if (!selectedWorkbook) return;
- 
-     const findNode = (nodes: TreeNode[]): TreeNode | null => {
+  const handleMigrateWorkbook = async () => {
+    if (!selectedWorkbook) return;
+
+    const findNode = (nodes: TreeNode[]): TreeNode | null => {
       for (const node of nodes) {
         if (node.id === selectedWorkbook.id) return node;
         if (node.children) {
@@ -137,7 +139,81 @@ const Explorer = () => {
     };
 
     const workbookNode = findNode(treeData);
-    if (workbookNode) {
+    if (!workbookNode) return;
+
+    const token = sessionStorage.getItem("tableau_api_token");
+    if (!token) {
+      toast({
+        title: "Session expired",
+        description: "Please sign in again",
+        variant: "destructive",
+      });
+      navigate("/");
+      return;
+    }
+
+    setIsMigrating(true);
+
+    try {
+      // Step 1: Download workbook
+      const downloadWorkbookResponse = await fetch(
+        "https://tableau-backend-app-hrdxfhfpghf3f0bg.eastus-01.azurewebsites.net/tableau/download_workbook",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            api_token: token,
+            workbook_id: selectedWorkbook.id,
+          }),
+        }
+      );
+
+      if (!downloadWorkbookResponse.ok) {
+        throw new Error("Failed to download workbook");
+      }
+
+      const downloadWorkbookData = await downloadWorkbookResponse.json();
+      console.log("Workbook downloaded:", downloadWorkbookData);
+
+      // Step 2: Download workbook datasources
+      const downloadDatasourcesResponse = await fetch(
+        "https://tableau-backend-app-hrdxfhfpghf3f0bg.eastus-01.azurewebsites.net/tableau/download_workbook_datasources",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            api_token: token,
+            workbook_id: selectedWorkbook.id,
+          }),
+        }
+      );
+
+      if (!downloadDatasourcesResponse.ok) {
+        throw new Error("Failed to download datasources");
+      }
+
+      const downloadDatasourcesData = await downloadDatasourcesResponse.json();
+      console.log("Datasources downloaded:", downloadDatasourcesData);
+
+      // Step 3: Extract data
+      const extractDataResponse = await fetch(
+        "https://dataset-extraction-b0erfxbtereygmgz.eastus-01.azurewebsites.net/extract-data",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            blob_path: `${selectedWorkbook.name}.twbx`,
+          }),
+        }
+      );
+
+      if (!extractDataResponse.ok) {
+        throw new Error("Failed to extract data");
+      }
+
+      const extractDataResult = await extractDataResponse.json();
+      console.log("Data extracted:", extractDataResult);
+
       // Store workbook data in session storage
       const workbookData = {
         id: selectedWorkbook.id,
@@ -146,17 +222,104 @@ const Explorer = () => {
         viewCount: selectedWorkbook.viewCount,
       };
       sessionStorage.setItem("selected_workbook", JSON.stringify(workbookData));
- 
-       // Navigate directly to workspace selection
-       navigate("/workspace-selection", {
-         state: { node: workbookNode, source: sourceId },
-       });
+
+      toast({
+        title: "Preparation complete",
+        description: "Ready to select destination workspace",
+      });
+
+      // Navigate to workspace selection
+      navigate("/workspace-selection", {
+        state: { node: workbookNode, source: sourceId },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Migration preparation failed";
+      toast({
+        title: "Migration failed",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsMigrating(false);
     }
   };
 
-   const handleMigrateNode = () => {
-     if (!selectedNode) return;
- 
+  const handleMigrateNode = async () => {
+    if (!selectedNode) return;
+
+    const token = sessionStorage.getItem("tableau_api_token");
+    if (!token) {
+      toast({
+        title: "Session expired",
+        description: "Please sign in again",
+        variant: "destructive",
+      });
+      navigate("/");
+      return;
+    }
+
+    setIsMigrating(true);
+
+    try {
+      // Step 1: Download workbook
+      const downloadWorkbookResponse = await fetch(
+        "https://tableau-backend-app-hrdxfhfpghf3f0bg.eastus-01.azurewebsites.net/tableau/download_workbook",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            api_token: token,
+            workbook_id: selectedNode.id,
+          }),
+        }
+      );
+
+      if (!downloadWorkbookResponse.ok) {
+        throw new Error("Failed to download workbook");
+      }
+
+      const downloadWorkbookData = await downloadWorkbookResponse.json();
+      console.log("Workbook downloaded:", downloadWorkbookData);
+
+      // Step 2: Download workbook datasources
+      const downloadDatasourcesResponse = await fetch(
+        "https://tableau-backend-app-hrdxfhfpghf3f0bg.eastus-01.azurewebsites.net/tableau/download_workbook_datasources",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            api_token: token,
+            workbook_id: selectedNode.id,
+          }),
+        }
+      );
+
+      if (!downloadDatasourcesResponse.ok) {
+        throw new Error("Failed to download datasources");
+      }
+
+      const downloadDatasourcesData = await downloadDatasourcesResponse.json();
+      console.log("Datasources downloaded:", downloadDatasourcesData);
+
+      // Step 3: Extract data
+      const extractDataResponse = await fetch(
+        "https://dataset-extraction-b0erfxbtereygmgz.eastus-01.azurewebsites.net/extract-data",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            blob_path: `${selectedNode.name}.twbx`,
+          }),
+        }
+      );
+
+      if (!extractDataResponse.ok) {
+        throw new Error("Failed to extract data");
+      }
+
+      const extractDataResult = await extractDataResponse.json();
+      console.log("Data extracted:", extractDataResult);
+
     // Store selected node data in session storage
     const nodeData = {
       id: selectedNode.id,
@@ -165,10 +328,25 @@ const Explorer = () => {
     };
     sessionStorage.setItem("selected_workbook", JSON.stringify(nodeData));
 
-    // Navigate directly to workspace selection without Azure modal
+      toast({
+        title: "Preparation complete",
+        description: "Ready to select destination workspace",
+      });
+
+    // Navigate to workspace selection
     navigate("/workspace-selection", {
       state: { node: selectedNode, source: sourceId },
     });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Migration preparation failed";
+      toast({
+        title: "Migration failed",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsMigrating(false);
+    }
   };
 
   const filteredWorkbooks = workbooks.filter(
@@ -245,8 +423,15 @@ const Explorer = () => {
 
             {selectedWorkbook && (
               <div className="p-4 border-t border-border flex justify-end flex-shrink-0">
-                 <Button variant="powerbi" size="lg" onClick={handleMigrateWorkbook}>
-                  Migrate to Power BI
+                <Button variant="powerbi" size="lg" onClick={handleMigrateWorkbook} disabled={isMigrating}>
+                  {isMigrating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Preparing Migration...
+                    </>
+                  ) : (
+                    "Migrate to Power BI"
+                  )}
                 </Button>
               </div>
             )}
@@ -270,8 +455,15 @@ const Explorer = () => {
 
             {selectedNode && (
               <div className="p-4 border-t border-border flex justify-end flex-shrink-0">
-                 <Button variant="powerbi" size="lg" onClick={handleMigrateNode}>
-                  Migrate to Power BI
+                <Button variant="powerbi" size="lg" onClick={handleMigrateNode} disabled={isMigrating}>
+                  {isMigrating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Preparing Migration...
+                    </>
+                  ) : (
+                    "Migrate to Power BI"
+                  )}
                 </Button>
               </div>
             )}
