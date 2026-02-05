@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { User } from "@/types/migration";
 
 interface AuthContextType {
@@ -17,67 +17,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch user details from /user/me endpoint
-  const fetchUserDetails = useCallback(async (): Promise<User | null> => {
+  // Check Azure AD authentication status by calling the backend
+  const checkAuth = async (): Promise<boolean> => {
     try {
-      const response = await fetch(`${BACKEND_BASE_URL}/user/me`, {
-        credentials: "include",
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const userData: User = {
-          id: data.id || "1",
-          name: data.displayName || "User",
-          email: data.mail || "",
-          jobTitle: data.jobTitle || undefined,
-          preferredLanguage: data.preferredLanguage || undefined,
-        };
-        
-        // Store in sessionStorage for persistence
-        sessionStorage.setItem("azure_user_name", userData.name);
-        sessionStorage.setItem("azure_user_email", userData.email);
-        sessionStorage.setItem("azure_user_id", userData.id);
-        if (userData.jobTitle) sessionStorage.setItem("azure_user_job_title", userData.jobTitle);
-        if (userData.preferredLanguage) sessionStorage.setItem("azure_user_language", userData.preferredLanguage);
-        
-        return userData;
-      }
-    } catch (error) {
-      console.error("Failed to fetch user details:", error);
-    }
-    return null;
-  }, []);
-
-  // Check Azure AD authentication status by calling /user/me
-  const checkAuth = useCallback(async (): Promise<boolean> => {
-    try {
-      const userData = await fetchUserDetails();
-      
-      if (userData) {
-        setUser(userData);
-        sessionStorage.setItem("powerbi_authenticated", "true");
-        return true;
-      }
-      
-      // Fallback to /workspaces if /user/me fails
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces`, {
         credentials: "include",
       });
 
       if (response.ok) {
+        // User is authenticated via Azure AD
         const storedName = sessionStorage.getItem("azure_user_name");
         const storedEmail = sessionStorage.getItem("azure_user_email");
-        const storedId = sessionStorage.getItem("azure_user_id");
-        const storedJobTitle = sessionStorage.getItem("azure_user_job_title");
-        const storedLanguage = sessionStorage.getItem("azure_user_language");
-        
+
         setUser({
-          id: storedId || "1",
+          id: "1",
           name: storedName || "User",
           email: storedEmail || "",
-          jobTitle: storedJobTitle || undefined,
-          preferredLanguage: storedLanguage || undefined,
         });
         sessionStorage.setItem("powerbi_authenticated", "true");
         return true;
@@ -87,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     return false;
-  }, [fetchUserDetails]);
+  };
 
   // Check for local (simulated) authentication
   const checkLocalAuth = (): boolean => {
@@ -95,16 +50,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (isLocalAuth) {
       const storedName = sessionStorage.getItem("azure_user_name");
       const storedEmail = sessionStorage.getItem("azure_user_email");
-      const storedId = sessionStorage.getItem("azure_user_id");
-      const storedJobTitle = sessionStorage.getItem("azure_user_job_title");
-      const storedLanguage = sessionStorage.getItem("azure_user_language");
 
       setUser({
-        id: storedId || "1",
+        id: "1",
         name: storedName || "User",
         email: storedEmail || "",
-        jobTitle: storedJobTitle || undefined,
-        preferredLanguage: storedLanguage || undefined,
       });
       return true;
     }
@@ -135,9 +85,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem("local_authenticated");
     sessionStorage.removeItem("azure_user_name");
     sessionStorage.removeItem("azure_user_email");
-    sessionStorage.removeItem("azure_user_id");
-    sessionStorage.removeItem("azure_user_job_title");
-    sessionStorage.removeItem("azure_user_language");
     // Optionally call backend logout endpoint
   };
 
