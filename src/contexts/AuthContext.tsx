@@ -23,21 +23,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch user details from /user/me endpoint
+  // Fetch user details from /auth/me endpoint
   const fetchUserDetails = async (): Promise<UserDetails | null> => {
     try {
-      const response = await fetch(`${BACKEND_BASE_URL}/user/me`, {
+      const response = await fetch(`${BACKEND_BASE_URL}/auth/me`, {
         credentials: "include",
       });
 
       if (response.ok) {
         const userData = await response.json();
+        // Map fields from backend: { name, email, oid, tenant }
         const userDetails: UserDetails = {
-          id: userData.id || "1",
-          name: userData.displayName || "User",
-          email: userData.mail || "",
-          jobTitle: userData.jobTitle,
-          preferredLanguage: userData.preferredLanguage,
+          id: userData.oid || "1",
+          name: userData.name || "User",
+          email: userData.email || "",
         };
 
         // Store in localStorage for persistence
