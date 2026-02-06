@@ -197,23 +197,67 @@ const Explorer = () => {
       console.log("Datasources downloaded:", downloadDatasourcesData);
 
       // Step 3: Extract data
+      // Add this to Explorer.tsx - in the handleMigrateWorkbook function
+      // Replace the Step 3 extract data section with this:
+
+      // Step 3: Extract data - WITH DETAILED LOGGING
+      const blobPath = `${selectedWorkbook.name}.twbx`;
+      console.log("[FRONTEND] === EXTRACT DATA DEBUG ===");
+      console.log("[FRONTEND] Blob path being sent:", blobPath);
+      console.log("[FRONTEND] Full request body:", {
+        blob_path: blobPath,
+      });
+
       const extractDataResponse = await fetch(
         "https://dataset-extraction2-gbdnhcd0dxeaf6df.eastus-01.azurewebsites.net/extract-data",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            blob_path: `${selectedWorkbook.name}.twbx`,
+            blob_path: blobPath,
           }),
         },
       );
 
       if (!extractDataResponse.ok) {
+        console.error("[FRONTEND] Extract API returned error:", extractDataResponse.status);
         throw new Error("Failed to extract data");
       }
 
       const extractDataResult = await extractDataResponse.json();
-      console.log("Data extracted:", extractDataResult);
+      console.log("[FRONTEND] Extract response received:");
+      console.log("[FRONTEND] Tables count:", extractDataResult.tables?.length || 0);
+      console.log("[FRONTEND] CSV files count:", extractDataResult.output_files?.length || 0);
+      console.log("[FRONTEND] Full response:", extractDataResult);
+
+      if (extractDataResult.error) {
+        console.error("[FRONTEND] Backend returned error:", extractDataResult.error);
+        throw new Error(extractDataResult.error);
+      }
+
+      // Check if we got expected results
+      if (extractDataResult.tables?.length === 1) {
+        console.warn("[FRONTEND] ⚠️ WARNING: Only 1 table extracted (expected 3?)");
+      } else if (extractDataResult.tables?.length === 3) {
+        console.log("[FRONTEND] ✅ SUCCESS: All 3 tables extracted!");
+      }
+      // const extractDataResponse = await fetch(
+      //   "https://dataset-extraction2-gbdnhcd0dxeaf6df.eastus-01.azurewebsites.net/extract-data",
+      //   {
+      //     method: "POST",
+      //     headers: { "Content-Type": "application/json" },
+      //     body: JSON.stringify({
+      //       blob_path: `${selectedWorkbook.name}.twbx`,
+      //     }),
+      //   },
+      // );
+
+      // if (!extractDataResponse.ok) {
+      //   throw new Error("Failed to extract data");
+      // }
+
+      // const extractDataResult = await extractDataResponse.json();
+      // console.log("Data extracted:", extractDataResult);
 
       // Store workbook data in session storage
       const workbookData = {
