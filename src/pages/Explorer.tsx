@@ -235,13 +235,27 @@ const Explorer = () => {
         throw new Error(extractDataResult.error);
       }
 
+      // Persist and expose the output location so you can verify the folder contents.
+      const outputFiles: string[] = Array.isArray(extractDataResult.output_files) ? extractDataResult.output_files : [];
+      const inferredFolderFromFirstUrl = outputFiles[0]
+        ? outputFiles[0].slice(0, outputFiles[0].lastIndexOf("/") + 1)
+        : "";
+      const outputFolderUrl =
+        inferredFolderFromFirstUrl ||
+        `https://tablueatopowerbi.blob.core.windows.net/tableau-datasources/${encodeURIComponent(selectedWorkbook.name)}/`;
+
+      sessionStorage.setItem("extraction_output_files", JSON.stringify(outputFiles));
+      sessionStorage.setItem("extraction_output_folder", outputFolderUrl);
+
+      console.log("[FRONTEND] Output folder URL:", outputFolderUrl);
+      console.log("[FRONTEND] Output files:", outputFiles);
+
       // Check if we got expected results
       if (extractDataResult.tables?.length === 1) {
         console.warn("[FRONTEND] ⚠️ WARNING: Only 1 table extracted (expected 3?)");
       } else if (extractDataResult.tables?.length === 3) {
         console.log("[FRONTEND] ✅ SUCCESS: All 3 tables extracted!");
       }
-      // const extractDataResponse = await fetch(
       //   "https://dataset-extraction2-gbdnhcd0dxeaf6df.eastus-01.azurewebsites.net/extract-data",
       //   {
       //     method: "POST",
@@ -365,6 +379,20 @@ const Explorer = () => {
 
       const extractDataResult = await extractDataResponse.json();
       console.log("Data extracted:", extractDataResult);
+
+      const outputFiles: string[] = Array.isArray(extractDataResult.output_files) ? extractDataResult.output_files : [];
+      const inferredFolderFromFirstUrl = outputFiles[0]
+        ? outputFiles[0].slice(0, outputFiles[0].lastIndexOf("/") + 1)
+        : "";
+      const outputFolderUrl =
+        inferredFolderFromFirstUrl ||
+        `https://tablueatopowerbi.blob.core.windows.net/tableau-datasources/${encodeURIComponent(selectedNode.name)}/`;
+
+      sessionStorage.setItem("extraction_output_files", JSON.stringify(outputFiles));
+      sessionStorage.setItem("extraction_output_folder", outputFolderUrl);
+
+      console.log("[FRONTEND] Output folder URL:", outputFolderUrl);
+      console.log("[FRONTEND] Output files:", outputFiles);
 
       // Store selected node data in session storage
       const nodeData = {
