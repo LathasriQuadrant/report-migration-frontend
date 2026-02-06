@@ -1,48 +1,56 @@
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
 /**
  * This page handles the callback from Azure AD authentication.
- * Automatically redirects to dashboard after successful auth.
+ * Reads user data from URL query param and redirects to dashboard.
  */
 const PowerBIAuthSuccess = () => {
   const navigate = useNavigate();
-  const { fetchUserDetails } = useAuth();
+  const [searchParams] = useSearchParams();
+  const { setUserFromCallback } = useAuth();
   const [isVerifying, setIsVerifying] = useState(true);
 
   useEffect(() => {
-    const verifyAndRedirect = async () => {
-      // Mark as authenticated in session storage FIRST - this is critical
-      sessionStorage.setItem("powerbi_authenticated", "true");
+    const processAuth = () => {
+      // Read user from URL query param
+      const userParam = searchParams.get("user");
       
-      // Try to fetch user details, but don't block on failure
-      try {
-        const userDetails = await fetchUserDetails();
-        
-        if (userDetails) {
-          sessionStorage.setItem("azure_user_name", userDetails.name);
-          sessionStorage.setItem("azure_user_email", userDetails.email);
-          console.log("User authenticated:", userDetails.name);
+      if (userParam) {
+        try {
+          const userData = JSON.parse(decodeURIComponent(userParam));
+          
+          // Store user details via AuthContext
+          setUserFromCallback({
+            id: userData.oid || "1",
+            name: userData.name || "User",
+            email: userData.email || "",
+            jobTitle: userData.jobTitle || "",
+          });
+          
+          console.log("User authenticated from callback:", userData.name);
+        } catch (error) {
+          console.error("Failed to parse user data:", error);
+          // Set basic auth flag even if parsing fails
+          sessionStorage.setItem("powerbi_authenticated", "true");
         }
-      } catch (error) {
-        console.log("Could not fetch user details, continuing with basic auth");
-        // Set a default user so auth context recognizes we're logged in
-        const basicUser = { id: "1", name: "User", email: "" };
-        localStorage.setItem("user_details", JSON.stringify(basicUser));
+      } else {
+        // No user param, but still mark as authenticated
+        sessionStorage.setItem("powerbi_authenticated", "true");
       }
       
       setIsVerifying(false);
       
-      // Navigate to dashboard - auth is confirmed by session flag
+      // Navigate to dashboard
       setTimeout(() => {
         navigate('/dashboard', { replace: true });
       }, 300);
     };
     
-    verifyAndRedirect();
-  }, [fetchUserDetails, navigate]);
+    processAuth();
+  }, [searchParams, setUserFromCallback, navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
