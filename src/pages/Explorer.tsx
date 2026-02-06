@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
- import { ArrowLeft, Search, RefreshCw, ChevronRight, LayoutGrid, List, BookOpen } from "lucide-react";
+import { ArrowLeft, Search, RefreshCw, ChevronRight, LayoutGrid, List, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import TreeView from "@/components/explorer/TreeView";
@@ -166,7 +166,7 @@ const Explorer = () => {
             workbook_id: selectedWorkbook.id,
             file_name: `${selectedWorkbook.name}.twbx`,
           }),
-        }
+        },
       );
 
       if (!downloadWorkbookResponse.ok) {
@@ -186,7 +186,7 @@ const Explorer = () => {
             api_token: token,
             workbook_id: selectedWorkbook.id,
           }),
-        }
+        },
       );
 
       if (!downloadDatasourcesResponse.ok) {
@@ -198,14 +198,14 @@ const Explorer = () => {
 
       // Step 3: Extract data
       const extractDataResponse = await fetch(
-        "https://dataset-extraction-b0erfxbtereygmgz.eastus-01.azurewebsites.net/extract-data",
+        "https://dataset-extraction2-gbdnhcd0dxeaf6df.eastus-01.azurewebsites.net/extract-data",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             blob_path: `${selectedWorkbook.name}.twbx`,
           }),
-        }
+        },
       );
 
       if (!extractDataResponse.ok) {
@@ -273,7 +273,7 @@ const Explorer = () => {
             workbook_id: selectedNode.id,
             file_name: `${selectedNode.name}.twbx`,
           }),
-        }
+        },
       );
 
       if (!downloadWorkbookResponse.ok) {
@@ -293,7 +293,7 @@ const Explorer = () => {
             api_token: token,
             workbook_id: selectedNode.id,
           }),
-        }
+        },
       );
 
       if (!downloadDatasourcesResponse.ok) {
@@ -305,14 +305,14 @@ const Explorer = () => {
 
       // Step 3: Extract data
       const extractDataResponse = await fetch(
-        "https://dataset-extraction-b0erfxbtereygmgz.eastus-01.azurewebsites.net/extract-data",
+        "https://dataset-extraction2-gbdnhcd0dxeaf6df.eastus-01.azurewebsites.net/extract-data",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             blob_path: `${selectedNode.name}.twbx`,
           }),
-        }
+        },
       );
 
       if (!extractDataResponse.ok) {
@@ -322,23 +322,23 @@ const Explorer = () => {
       const extractDataResult = await extractDataResponse.json();
       console.log("Data extracted:", extractDataResult);
 
-    // Store selected node data in session storage
-    const nodeData = {
-      id: selectedNode.id,
-      name: selectedNode.name,
-      type: selectedNode.type,
-    };
-    sessionStorage.setItem("selected_workbook", JSON.stringify(nodeData));
+      // Store selected node data in session storage
+      const nodeData = {
+        id: selectedNode.id,
+        name: selectedNode.name,
+        type: selectedNode.type,
+      };
+      sessionStorage.setItem("selected_workbook", JSON.stringify(nodeData));
 
       toast({
         title: "Preparation complete",
         description: "Ready to select destination workspace",
       });
 
-    // Navigate to workspace selection
-    navigate("/workspace-selection", {
-      state: { node: selectedNode, source: sourceId },
-    });
+      // Navigate to workspace selection
+      navigate("/workspace-selection", {
+        state: { node: selectedNode, source: sourceId },
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Migration preparation failed";
       toast({
