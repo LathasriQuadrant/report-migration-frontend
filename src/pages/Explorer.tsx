@@ -250,12 +250,10 @@ const Explorer = () => {
       console.log("[FRONTEND] Output folder URL:", outputFolderUrl);
       console.log("[FRONTEND] Output files:", outputFiles);
 
-      // Check if we got expected results
-      if (extractDataResult.tables?.length === 1) {
-        console.warn("[FRONTEND] ⚠️ WARNING: Only 1 table extracted (expected 3?)");
-      } else if (extractDataResult.tables?.length === 3) {
-        console.log("[FRONTEND] ✅ SUCCESS: All 3 tables extracted!");
-      }
+      // Log extraction results
+      const tableCount = extractDataResult.tables?.length || 0;
+      console.log(`[FRONTEND] ✅ Extracted ${tableCount} table(s):`, extractDataResult.tables?.map((t: any) => t.name || t) || []);
+      console.log(`[FRONTEND] ✅ Generated ${outputFiles.length} CSV file(s):`, outputFiles);
       //   "https://dataset-extraction2-gbdnhcd0dxeaf6df.eastus-01.azurewebsites.net/extract-data",
       //   {
       //     method: "POST",
