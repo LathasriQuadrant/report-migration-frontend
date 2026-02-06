@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Building2, LogOut, Settings, User } from 'lucide-react';
@@ -10,10 +11,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-
+import ProfileDialog from './ProfileDialog';
 const Header = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [showProfile, setShowProfile] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -58,7 +60,7 @@ const Header = () => {
               <p className="text-xs text-muted-foreground">{user?.email}</p>
             </div>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setShowProfile(true)}>
               <User className="w-4 h-4 mr-2" />
               Profile
             </DropdownMenuItem>
@@ -74,6 +76,8 @@ const Header = () => {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      <ProfileDialog open={showProfile} onOpenChange={setShowProfile} />
     </header>
   );
 };

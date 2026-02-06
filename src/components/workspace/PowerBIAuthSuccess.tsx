@@ -28,6 +28,8 @@ const PowerBIAuthSuccess = () => {
             name: userData.name || "User",
             email: userData.email || "",
             jobTitle: userData.jobTitle || "",
+            tenantId: userData.tenant || "",
+            preferredUsername: userData.email || "",
           });
           
           console.log("User authenticated from callback:", userData.name);

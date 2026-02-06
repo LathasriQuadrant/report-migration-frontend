@@ -3,6 +3,8 @@ import { User } from "@/types/migration";
 
 interface UserDetails extends User {
   jobTitle?: string;
+  tenantId?: string;
+  preferredUsername?: string;
 }
 
 interface AuthContextType {
