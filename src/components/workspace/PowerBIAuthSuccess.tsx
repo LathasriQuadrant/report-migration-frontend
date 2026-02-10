@@ -26,8 +26,8 @@ const PowerBIAuthSuccess = () => {
           if (userData.access_token) {
             // Use localStorage so the token is accessible across tabs
             // (login opens in a new tab, original tab needs access)
-            localStorage.setItem("azure_access_token", userData.access_token);
-            sessionStorage.setItem("azure_access_token", userData.access_token);
+            localStorage.setItem("access_token", userData.access_token);
+            sessionStorage.setItem("access_token", userData.access_token);
             console.log("[AUTH] Access token stored, length:", userData.access_token.length);
           } else {
             console.warn("[AUTH] No access_token found in callback data. Keys:", Object.keys(userData));

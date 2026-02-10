@@ -77,11 +77,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem("powerbi_authenticated");
     sessionStorage.removeItem("azure_user_name");
     sessionStorage.removeItem("azure_user_email");
-    sessionStorage.removeItem("azure_access_token");
+    sessionStorage.removeItem("access_token");
     sessionStorage.removeItem("user_details");
     localStorage.removeItem("user_details");
     localStorage.removeItem("user_id");
     localStorage.removeItem("user_email");
+    localStorage.removeItem("access_token");
   };
 
   return (
