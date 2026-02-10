@@ -48,6 +48,14 @@ export interface SelectedPowerBIWorkspace {
 
 const BACKEND_BASE_URL = "https://powerbi-azure-auth-app-e6dtdsb2ccawg9cy.eastus-01.azurewebsites.net";
 
+const getAuthHeaders = (extra: Record<string, string> = {}): Record<string, string> => {
+  const token = localStorage.getItem("access_token") || sessionStorage.getItem("access_token") || "";
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...extra,
+  };
+};
+
 const sourceNames: Record<string, string> = {
   tableau: "Tableau",
   microstrategy: "MicroStrategy",
@@ -93,7 +101,7 @@ const DestinationWorkspaceSelection = () => {
       setError(null);
 
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces`, {
-        credentials: "include",
+        headers: getAuthHeaders(),
       });
 
       if (response.status === 401) {
@@ -189,10 +197,7 @@ const DestinationWorkspaceSelection = () => {
 
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces`, {
         method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           workspace_name: newWorkspaceName.trim(),
         }),
@@ -228,10 +233,7 @@ const DestinationWorkspaceSelection = () => {
     try {
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces/add-sp`, {
         method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           workspace_id: workspaceId,
         }),
@@ -264,10 +266,7 @@ const DestinationWorkspaceSelection = () => {
 
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces/${selectedWorkspace.id}/auto-upload`, {
         method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           report_name: nodeInfo.name,
         }),
