@@ -41,7 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const isPowerBIAuth = sessionStorage.getItem("powerbi_authenticated") === "true";
     
     if (isPowerBIAuth) {
-      const cachedDetails = localStorage.getItem("user_details");
+      const cachedDetails = sessionStorage.getItem("user_details") || localStorage.getItem("user_details");
       if (cachedDetails) {
         try {
           setUser(JSON.parse(cachedDetails));
@@ -77,10 +77,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem("powerbi_authenticated");
     sessionStorage.removeItem("azure_user_name");
     sessionStorage.removeItem("azure_user_email");
+    sessionStorage.removeItem("azure_access_token");
+    sessionStorage.removeItem("user_details");
     localStorage.removeItem("user_details");
     localStorage.removeItem("user_id");
     localStorage.removeItem("user_email");
-    localStorage.removeItem("azure_access_token");
   };
 
   return (

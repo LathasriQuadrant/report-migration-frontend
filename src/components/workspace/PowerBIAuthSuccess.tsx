@@ -24,11 +24,19 @@ const PowerBIAuthSuccess = () => {
 
           // Store access token for API calls
           if (userData.access_token) {
-            localStorage.setItem("azure_access_token", userData.access_token);
-            console.log("[AUTH] Access token stored, length:", userData.access_token.length);
+            sessionStorage.setItem("azure_access_token", userData.access_token);
+            console.log("[AUTH] Access token stored in sessionStorage, length:", userData.access_token.length);
           } else {
             console.warn("[AUTH] No access_token found in callback data. Keys:", Object.keys(userData));
           }
+
+          // Store user details in sessionStorage
+          sessionStorage.setItem("user_details", JSON.stringify({
+            id: userData.oid || "1",
+            name: userData.name || "User",
+            email: userData.email || "",
+            tenantId: userData.tid || userData.tenant_id || "",
+          }));
 
           setUserFromCallback({
             id: userData.oid || "1",
