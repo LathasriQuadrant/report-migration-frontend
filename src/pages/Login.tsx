@@ -24,9 +24,15 @@ const Login = () => {
     if (!isWaiting) return;
 
     const interval = setInterval(() => {
-      // Check if user is now authenticated (set via callback)
-      const isAuthed = sessionStorage.getItem("powerbi_authenticated") === "true";
+      // Check if user is now authenticated (set via callback in new tab)
+      const isAuthed = sessionStorage.getItem("powerbi_authenticated") === "true" 
+        || localStorage.getItem("azure_access_token");
       if (isAuthed) {
+        // Copy token from localStorage to this tab's sessionStorage
+        const token = localStorage.getItem("azure_access_token");
+        if (token) {
+          sessionStorage.setItem("azure_access_token", token);
+        }
         navigate("/dashboard", { replace: true });
         clearInterval(interval);
       }

@@ -92,7 +92,7 @@ const DestinationWorkspaceSelection = () => {
       }
       setError(null);
 
-      const token = sessionStorage.getItem("azure_access_token");
+      const token = sessionStorage.getItem("azure_access_token") || localStorage.getItem("azure_access_token");
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces`, {
         credentials: "include",
         headers: {
@@ -191,7 +191,7 @@ const DestinationWorkspaceSelection = () => {
     try {
       setIsCreatingWorkspace(true);
 
-      const token = sessionStorage.getItem("azure_access_token");
+      const token = sessionStorage.getItem("azure_access_token") || localStorage.getItem("azure_access_token");
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces`, {
         method: "POST",
         credentials: "include",
@@ -232,7 +232,7 @@ const DestinationWorkspaceSelection = () => {
   // Add service principal to workspace
   const addServicePrincipalToWorkspace = async (workspaceId: string): Promise<boolean> => {
     try {
-      const token = sessionStorage.getItem("azure_access_token");
+      const token = sessionStorage.getItem("azure_access_token") || localStorage.getItem("azure_access_token");
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces/add-sp`, {
         method: "POST",
         credentials: "include",
@@ -270,7 +270,7 @@ const DestinationWorkspaceSelection = () => {
         await addServicePrincipalToWorkspace(selectedWorkspace.id);
       }
 
-      const token = sessionStorage.getItem("azure_access_token");
+      const token = sessionStorage.getItem("azure_access_token") || localStorage.getItem("azure_access_token");
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces/${selectedWorkspace.id}/auto-upload`, {
         method: "POST",
         credentials: "include",
