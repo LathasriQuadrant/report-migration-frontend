@@ -5,14 +5,12 @@ interface UserDetails extends User {
   jobTitle?: string;
   tenantId?: string;
   preferredUsername?: string;
-  accessToken?: string;
 }
 
 interface AuthContextType {
   user: UserDetails | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  accessToken: string | null;
   setUserFromCallback: (user: UserDetails) => void;
   logout: () => void;
 }
@@ -21,7 +19,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserDetails | null>(null);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Set user from callback URL parameter
@@ -30,12 +27,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("user_details", JSON.stringify(userData));
     localStorage.setItem("user_id", userData.id);
     localStorage.setItem("user_email", userData.email);
-    
-    // Store access token separately for security
-    if (userData.accessToken) {
-      localStorage.setItem("powerbi_access_token", userData.accessToken);
-      setAccessToken(userData.accessToken);
-    }
     
     // Store in sessionStorage for session management
     sessionStorage.setItem("azure_user_name", userData.name);
@@ -48,12 +39,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Check for existing session on mount
   const checkSessionAuth = (): boolean => {
     const isPowerBIAuth = sessionStorage.getItem("powerbi_authenticated") === "true";
-    
-    // Restore access token
-    const storedToken = localStorage.getItem("powerbi_access_token");
-    if (storedToken) {
-      setAccessToken(storedToken);
-    }
     
     if (isPowerBIAuth) {
       const cachedDetails = localStorage.getItem("user_details");
@@ -89,18 +74,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     setUser(null);
-    setAccessToken(null);
     sessionStorage.removeItem("powerbi_authenticated");
     sessionStorage.removeItem("azure_user_name");
     sessionStorage.removeItem("azure_user_email");
     localStorage.removeItem("user_details");
     localStorage.removeItem("user_id");
     localStorage.removeItem("user_email");
-    localStorage.removeItem("powerbi_access_token");
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, accessToken, setUserFromCallback, logout }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, setUserFromCallback, logout }}>
       {children}
     </AuthContext.Provider>
   );
