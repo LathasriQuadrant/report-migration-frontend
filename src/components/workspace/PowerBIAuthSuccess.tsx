@@ -1,75 +1,75 @@
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { CheckCircle2, Loader2, AlertCircle } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
-/**
- * This page handles the callback from Azure AD authentication.
- * Reads user data from URL query param and redirects to dashboard.
- */
+const BACKEND_BASE_URL = "https://powerbi-azure-auth-app-e6dtdsb2ccawg9cy.eastus-01.azurewebsites.net";
+
 const PowerBIAuthSuccess = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const { setUserFromCallback } = useAuth();
   const [isVerifying, setIsVerifying] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const processAuth = () => {
-      // Read user from URL query param
-      const userParam = searchParams.get("user");
-      
-      if (userParam) {
-        try {
-          const userData = JSON.parse(decodeURIComponent(userParam));
-          
-          // Store user details via AuthContext
-          setUserFromCallback({
-            id: userData.oid || "1",
-            name: userData.name || "User",
-            email: userData.email || "",
-            jobTitle: userData.jobTitle || "",
-            tenantId: userData.tenant || "",
-            preferredUsername: userData.email || "",
-          });
-          
-          console.log("User authenticated from callback:", userData.name);
-        } catch (error) {
-          console.error("Failed to parse user data:", error);
-          // Set basic auth flag even if parsing fails
-          sessionStorage.setItem("powerbi_authenticated", "true");
+    const fetchUserFromSession = async () => {
+      try {
+        const res = await fetch(`${BACKEND_BASE_URL}/auth/me`, {
+          credentials: "include",
+        });
+
+        if (!res.ok) {
+          throw new Error(`Failed to fetch user: ${res.status}`);
         }
-      } else {
-        // No user param, but still mark as authenticated
-        sessionStorage.setItem("powerbi_authenticated", "true");
+
+        const userData = await res.json();
+        console.log("[AUTH] User data from backend session:", userData);
+
+        setUserFromCallback({
+          id: userData.oid || "1",
+          name: userData.name || "User",
+          email: userData.email || "",
+          jobTitle: userData.jobTitle || "",
+          tenantId: userData.tenant_id || "",
+          preferredUsername: userData.email || "",
+        });
+
+        setIsVerifying(false);
+
+        setTimeout(() => {
+          navigate("/dashboard", { replace: true });
+        }, 300);
+      } catch (err: any) {
+        console.error("[AUTH] Failed to fetch user from session:", err);
+        setError(err.message);
+        setIsVerifying(false);
       }
-      
-      setIsVerifying(false);
-      
-      // Navigate to dashboard
-      setTimeout(() => {
-        navigate('/dashboard', { replace: true });
-      }, 300);
     };
-    
-    processAuth();
-  }, [searchParams, setUserFromCallback, navigate]);
+
+    fetchUserFromSession();
+  }, [setUserFromCallback, navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="text-center space-y-4 p-8 max-w-md">
-        <div className="w-16 h-16 rounded-full bg-success/10 mx-auto flex items-center justify-center">
+        <div className="w-16 h-16 rounded-full mx-auto flex items-center justify-center"
+          style={{ backgroundColor: error ? "hsl(var(--destructive) / 0.1)" : isVerifying ? "hsl(var(--primary) / 0.1)" : "hsl(var(--success, 142 76% 36%) / 0.1)" }}>
           {isVerifying ? (
             <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          ) : error ? (
+            <AlertCircle className="w-8 h-8 text-destructive" />
           ) : (
-            <CheckCircle2 className="w-8 h-8 text-success" />
+            <CheckCircle2 className="w-8 h-8 text-green-600" />
           )}
         </div>
         <h2 className="text-xl font-semibold">
-          {isVerifying ? "Verifying..." : "Authentication Successful"}
+          {isVerifying ? "Verifying..." : error ? "Authentication Failed" : "Authentication Successful"}
         </h2>
         <p className="text-muted-foreground">
-          {isVerifying 
+          {isVerifying
             ? "Please wait while we verify your credentials..."
+            : error
+            ? error
             : "Redirecting to dashboard..."}
         </p>
       </div>
