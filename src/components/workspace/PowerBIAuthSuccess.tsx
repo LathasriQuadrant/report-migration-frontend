@@ -22,10 +22,8 @@ const PowerBIAuthSuccess = () => {
       
       setIsVerifying(false);
       
-      // Redirect to dashboard after short delay
-      setTimeout(() => {
-        navigate('/dashboard', { replace: true });
-      }, 1500);
+      // Redirect to dashboard immediately
+      navigate('/dashboard', { replace: true });
     };
     
     verifyAndRedirect();
