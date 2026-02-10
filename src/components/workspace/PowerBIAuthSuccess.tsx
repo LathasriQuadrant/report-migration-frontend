@@ -17,12 +17,16 @@ const PowerBIAuthSuccess = () => {
       // Mark as authenticated in session storage
       sessionStorage.setItem("powerbi_authenticated", "true");
       
-      // Verify auth with backend and update context
-      await checkAuth();
+      // Try to verify with backend but don't block on failure
+      try {
+        await checkAuth();
+      } catch (e) {
+        console.warn("Auth verification skipped:", e);
+      }
       
       setIsVerifying(false);
       
-      // Redirect to dashboard immediately
+      // Redirect to dashboard immediately regardless of API result
       navigate('/dashboard', { replace: true });
     };
     

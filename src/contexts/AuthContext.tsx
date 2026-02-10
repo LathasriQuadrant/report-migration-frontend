@@ -44,36 +44,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return false;
   };
 
-  // Check for local (simulated) authentication
+  // Check for local (simulated or PowerBI) authentication
   const checkLocalAuth = (): boolean => {
     const isLocalAuth = sessionStorage.getItem("local_authenticated") === "true";
-    if (isLocalAuth) {
+    const isPowerBIAuth = sessionStorage.getItem("powerbi_authenticated") === "true";
+    if (isLocalAuth || isPowerBIAuth) {
       const storedName = sessionStorage.getItem("azure_user_name");
       const storedEmail = sessionStorage.getItem("azure_user_email");
+      const storedDetails = localStorage.getItem("user_details");
+      
+      let name = storedName || "User";
+      let email = storedEmail || "";
+      
+      if (storedDetails) {
+        try {
+          const details = JSON.parse(storedDetails);
+          name = details.name || name;
+          email = details.email || email;
+        } catch {}
+      }
 
       setUser({
         id: "1",
-        name: storedName || "User",
-        email: storedEmail || "",
+        name,
+        email,
       });
       return true;
     }
     return false;
   };
 
-  // Check auth on mount - try local first, then Azure AD
+  // Check auth on mount - try local first, then Azure AD (skip on failure)
   useEffect(() => {
     const initAuth = async () => {
       setIsLoading(true);
 
-      // First check local auth (faster, no network call)
+      // First check local/PowerBI auth (faster, no network call)
       if (checkLocalAuth()) {
         setIsLoading(false);
         return;
       }
 
-      // Then check Azure AD auth
-      await checkAuth();
+      // Then try Azure AD auth, but don't block if it fails
+      try {
+        await checkAuth();
+      } catch (e) {
+        console.warn("Azure AD auth check skipped:", e);
+      }
       setIsLoading(false);
     };
     initAuth();
