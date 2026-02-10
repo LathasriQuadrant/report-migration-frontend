@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Shield, Zap, Clock, ArrowLeft, ExternalLink, Loader2 } from "lucide-react";
@@ -9,8 +9,9 @@ const LOGIN_URL = `${BACKEND_BASE_URL}/login`;
 
 const Login = () => {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, checkAuth } = useAuth();
   const [isWaiting, setIsWaiting] = useState(false);
+  const [loginWindow, setLoginWindow] = useState<Window | null>(null);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -19,40 +20,45 @@ const Login = () => {
     }
   }, [isAuthenticated, navigate]);
 
-  // Poll for authentication completion when waiting (cross-tab via localStorage)
+  // Check if auth completed
+  const checkAuthCompletion = useCallback(async () => {
+    const isAuthed = await checkAuth();
+    if (isAuthed) {
+      navigate("/dashboard", { replace: true });
+      return true;
+    }
+    return false;
+  }, [checkAuth, navigate]);
+
+  // Poll for authentication completion when waiting
   useEffect(() => {
     if (!isWaiting) return;
 
-    const interval = setInterval(() => {
-      const hasToken = localStorage.getItem("access_token");
-      const isAuthed = sessionStorage.getItem("powerbi_authenticated") === "true";
-      if (hasToken || isAuthed) {
-        // Sync token to sessionStorage if needed
-        if (hasToken) {
-          sessionStorage.setItem("access_token", hasToken);
-          sessionStorage.setItem("powerbi_authenticated", "true");
-        }
-        // Reload user details from localStorage
-        const cachedDetails = localStorage.getItem("user_details");
-        if (cachedDetails) {
-          try {
-            const userData = JSON.parse(cachedDetails);
-            // Re-trigger auth context
-            sessionStorage.setItem("azure_user_name", userData.name || "");
-            sessionStorage.setItem("azure_user_email", userData.email || "");
-          } catch (e) {}
+    const interval = setInterval(async () => {
+      if (loginWindow && loginWindow.closed) {
+        const isAuthed = await checkAuthCompletion();
+        if (!isAuthed) {
+          setIsWaiting(false);
+          setLoginWindow(null);
         }
         clearInterval(interval);
-        navigate("/dashboard", { replace: true });
+        return;
       }
-    }, 1000);
+
+      const isAuthed = await checkAuthCompletion();
+      if (isAuthed) {
+        loginWindow?.close();
+        clearInterval(interval);
+      }
+    }, 1500);
 
     return () => clearInterval(interval);
-  }, [isWaiting, navigate]);
+  }, [isWaiting, loginWindow, checkAuthCompletion]);
 
   const handleAzureSignIn = () => {
     setIsWaiting(true);
-    window.open(LOGIN_URL, "_blank", "noopener");
+    const newWindow = window.open(LOGIN_URL, "_blank", "noopener");
+    setLoginWindow(newWindow);
   };
 
   return (
@@ -181,6 +187,7 @@ const Login = () => {
                     size="sm"
                     onClick={() => {
                       setIsWaiting(false);
+                      setLoginWindow(null);
                     }}
                   >
                     Cancel

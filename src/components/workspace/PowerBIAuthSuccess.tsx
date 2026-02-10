@@ -1,67 +1,35 @@
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
-const BACKEND_BASE_URL = "https://powerbi-azure-auth-app-e6dtdsb2ccawg9cy.eastus-01.azurewebsites.net";
-
+/**
+ * This page handles the callback from Azure AD authentication.
+ * Automatically redirects to dashboard after successful auth.
+ */
 const PowerBIAuthSuccess = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const { setUserFromCallback } = useAuth();
+  const { checkAuth } = useAuth();
   const [isVerifying, setIsVerifying] = useState(true);
 
   useEffect(() => {
-    const processAuth = () => {
-      const userParam = searchParams.get("user");
-      const tokenParam = searchParams.get("access_token");
-
-      let userDetails = {
-        id: "1",
-        name: "Power BI User",
-        email: "user@organization.com",
-        jobTitle: "",
-        tenantId: "",
-        preferredUsername: "",
-      };
-
-      // Try to parse user details from URL if available
-      if (userParam) {
-        try {
-          const userData = JSON.parse(decodeURIComponent(userParam));
-          userDetails = {
-            id: userData.oid || "1",
-            name: userData.name || "Power BI User",
-            email: userData.email || userData.preferred_username || "user@organization.com",
-            jobTitle: userData.jobTitle || "",
-            tenantId: userData.tenant || userData.tid || "",
-            preferredUsername: userData.preferred_username || userData.email || "",
-          };
-          const accessToken = tokenParam || userData.access_token || "";
-          if (accessToken) {
-            localStorage.setItem("access_token", accessToken);
-            sessionStorage.setItem("access_token", accessToken);
-          }
-        } catch (e) {
-          console.warn("[AUTH] Could not parse user param, using defaults");
-        }
-      }
-
-      if (tokenParam) {
-        localStorage.setItem("access_token", tokenParam);
-        sessionStorage.setItem("access_token", tokenParam);
-      }
-
-      // Always set user and navigate — no blocking on /auth/me
-      setUserFromCallback(userDetails);
-      console.log("[AUTH] User set:", userDetails.name);
-
+    const verifyAndRedirect = async () => {
+      // Mark as authenticated in session storage
+      sessionStorage.setItem("powerbi_authenticated", "true");
+      
+      // Verify auth with backend and update context
+      await checkAuth();
+      
       setIsVerifying(false);
-      setTimeout(() => navigate('/dashboard', { replace: true }), 400);
+      
+      // Redirect to dashboard after short delay
+      setTimeout(() => {
+        navigate('/dashboard', { replace: true });
+      }, 1500);
     };
-
-    processAuth();
-  }, [searchParams, setUserFromCallback, navigate]);
+    
+    verifyAndRedirect();
+  }, [checkAuth, navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">

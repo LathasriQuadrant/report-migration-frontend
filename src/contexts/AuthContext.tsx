@@ -1,116 +1,95 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { User } from "@/types/migration";
 
-interface UserDetails extends User {
-  jobTitle?: string;
-  tenantId?: string;
-  preferredUsername?: string;
-}
-
 interface AuthContextType {
-  user: UserDetails | null;
+  user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  setUserFromCallback: (user: UserDetails) => void;
+  checkAuth: () => Promise<boolean>;
   logout: () => void;
 }
+
+const BACKEND_BASE_URL = "https://powerbi-azure-auth-app-e6dtdsb2ccawg9cy.eastus-01.azurewebsites.net";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<UserDetails | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Set user from callback URL parameter
-  const setUserFromCallback = (userData: UserDetails) => {
-    // Store in localStorage for persistence
-    localStorage.setItem("user_details", JSON.stringify(userData));
-    localStorage.setItem("user_id", userData.id);
-    localStorage.setItem("user_email", userData.email);
-    
-    // Store in sessionStorage for session management
-    sessionStorage.setItem("azure_user_name", userData.name);
-    sessionStorage.setItem("azure_user_email", userData.email);
-    sessionStorage.setItem("powerbi_authenticated", "true");
-    
-    setUser(userData);
-  };
+  // Check Azure AD authentication status by calling the backend
+  const checkAuth = async (): Promise<boolean> => {
+    try {
+      const response = await fetch(`${BACKEND_BASE_URL}/workspaces`, {
+        credentials: "include",
+      });
 
-  // Check for existing session on mount
-  const checkSessionAuth = (): boolean => {
-    const isPowerBIAuth = sessionStorage.getItem("powerbi_authenticated") === "true";
-    
-    if (isPowerBIAuth) {
-      const cachedDetails = localStorage.getItem("user_details");
-      if (cachedDetails) {
-        try {
-          setUser(JSON.parse(cachedDetails));
-          return true;
-        } catch (e) {
-          // Invalid JSON, continue to fallback
-        }
-      }
-      // Set minimal user if no cached details
-      const storedName = sessionStorage.getItem("azure_user_name");
-      const storedEmail = sessionStorage.getItem("azure_user_email");
-      if (storedName || storedEmail) {
+      if (response.ok) {
+        // User is authenticated via Azure AD
+        const storedName = sessionStorage.getItem("azure_user_name");
+        const storedEmail = sessionStorage.getItem("azure_user_email");
+
         setUser({
-          id: localStorage.getItem("user_id") || "1",
+          id: "1",
           name: storedName || "User",
           email: storedEmail || "",
         });
+        sessionStorage.setItem("powerbi_authenticated", "true");
         return true;
       }
+    } catch (error) {
+      console.error("Azure AD auth check failed:", error);
+    }
+
+    return false;
+  };
+
+  // Check for local (simulated) authentication
+  const checkLocalAuth = (): boolean => {
+    const isLocalAuth = sessionStorage.getItem("local_authenticated") === "true";
+    if (isLocalAuth) {
+      const storedName = sessionStorage.getItem("azure_user_name");
+      const storedEmail = sessionStorage.getItem("azure_user_email");
+
+      setUser({
+        id: "1",
+        name: storedName || "User",
+        email: storedEmail || "",
+      });
+      return true;
     }
     return false;
   };
 
-  // Check auth on mount
+  // Check auth on mount - try local first, then Azure AD
   useEffect(() => {
-    setIsLoading(true);
-    checkSessionAuth();
-    setIsLoading(false);
-  }, []);
+    const initAuth = async () => {
+      setIsLoading(true);
 
-  // Listen for cross-tab auth changes (login happens in separate tab)
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "user_details" && e.newValue) {
-        try {
-          const userData = JSON.parse(e.newValue);
-          setUser(userData);
-          sessionStorage.setItem("powerbi_authenticated", "true");
-          sessionStorage.setItem("azure_user_name", userData.name || "");
-          sessionStorage.setItem("azure_user_email", userData.email || "");
-        } catch (err) {
-          // ignore parse errors
-        }
+      // First check local auth (faster, no network call)
+      if (checkLocalAuth()) {
+        setIsLoading(false);
+        return;
       }
-      if (e.key === "access_token" && e.newValue) {
-        sessionStorage.setItem("access_token", e.newValue);
-        sessionStorage.setItem("powerbi_authenticated", "true");
-        // If user not yet set, try loading from localStorage
-        if (!user) {
-          checkSessionAuth();
-        }
-      }
+
+      // Then check Azure AD auth
+      await checkAuth();
+      setIsLoading(false);
     };
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, [user]);
+    initAuth();
+  }, []);
 
   const logout = () => {
     setUser(null);
     sessionStorage.removeItem("powerbi_authenticated");
+    sessionStorage.removeItem("local_authenticated");
     sessionStorage.removeItem("azure_user_name");
     sessionStorage.removeItem("azure_user_email");
-    localStorage.removeItem("user_details");
-    localStorage.removeItem("user_id");
-    localStorage.removeItem("user_email");
+    // Optionally call backend logout endpoint
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, setUserFromCallback, logout }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, checkAuth, logout }}>
       {children}
     </AuthContext.Provider>
   );

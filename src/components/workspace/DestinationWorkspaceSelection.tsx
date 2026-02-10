@@ -190,7 +190,9 @@ const DestinationWorkspaceSelection = () => {
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces`, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           workspace_name: newWorkspaceName.trim(),
         }),
@@ -227,7 +229,9 @@ const DestinationWorkspaceSelection = () => {
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces/add-sp`, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           workspace_id: workspaceId,
         }),
@@ -261,7 +265,9 @@ const DestinationWorkspaceSelection = () => {
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces/${selectedWorkspace.id}/auto-upload`, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           report_name: nodeInfo.name,
         }),
