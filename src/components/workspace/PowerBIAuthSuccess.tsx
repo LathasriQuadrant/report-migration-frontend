@@ -3,10 +3,8 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
-/**
- * This page handles the callback from Azure AD authentication.
- * Reads user data from URL query param and redirects to dashboard.
- */
+const BACKEND_BASE_URL = "https://powerbi-azure-auth-app-e6dtdsb2ccawg9cy.eastus-01.azurewebsites.net";
+
 const PowerBIAuthSuccess = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -14,47 +12,72 @@ const PowerBIAuthSuccess = () => {
   const [isVerifying, setIsVerifying] = useState(true);
 
   useEffect(() => {
-    const processAuth = () => {
-      // Read user from URL query param
+    const processAuth = async () => {
       const userParam = searchParams.get("user");
+      const tokenParam = searchParams.get("access_token");
       
       if (userParam) {
         try {
           const userData = JSON.parse(decodeURIComponent(userParam));
           
-          // Persist access_token so the original Login tab can detect auth
-          if (userData.access_token) {
-            localStorage.setItem("access_token", userData.access_token);
-            sessionStorage.setItem("access_token", userData.access_token);
+          const accessToken = tokenParam || userData.access_token || "";
+          if (accessToken) {
+            localStorage.setItem("access_token", accessToken);
+            sessionStorage.setItem("access_token", accessToken);
             console.log("[AUTH] Access token persisted");
           }
           
-          // Store user details via AuthContext
           const userDetails = {
             id: userData.oid || "1",
             name: userData.name || "User",
-            email: userData.email || userData.preferredUsername || "",
+            email: userData.email || userData.preferred_username || userData.preferredUsername || "",
             jobTitle: userData.jobTitle || "",
-            tenantId: userData.tenant || userData.tid || userData.tenant_id || "",
-            preferredUsername: userData.preferredUsername || userData.email || "",
+            tenantId: userData.tenant || userData.tid || "",
+            preferredUsername: userData.preferred_username || userData.preferredUsername || userData.email || "",
           };
           
           setUserFromCallback(userDetails);
-          
-          console.log("[AUTH] User authenticated from callback:", userDetails.name, userDetails.email);
+          console.log("[AUTH] User authenticated from URL param:", userDetails.name);
         } catch (error) {
           console.error("[AUTH] Failed to parse user data:", error);
           sessionStorage.setItem("powerbi_authenticated", "true");
         }
       } else {
-        // No user param, but still mark as authenticated
-        sessionStorage.setItem("powerbi_authenticated", "true");
-        console.log("[AUTH] No user param, marked as authenticated");
+        // No user param — try fetching from /auth/me using session cookie
+        console.log("[AUTH] No user param, trying /auth/me...");
+        try {
+          const res = await fetch(`${BACKEND_BASE_URL}/auth/me`, {
+            credentials: "include",
+          });
+          if (res.ok) {
+            const userData = await res.json();
+            console.log("[AUTH] Got user from /auth/me:", userData);
+            
+            const userDetails = {
+              id: userData.oid || "1",
+              name: userData.name || "User",
+              email: userData.email || "",
+              tenantId: userData.tenant || "",
+              preferredUsername: userData.email || "",
+            };
+            setUserFromCallback(userDetails);
+          } else {
+            console.warn("[AUTH] /auth/me returned", res.status);
+            sessionStorage.setItem("powerbi_authenticated", "true");
+          }
+        } catch (err) {
+          console.warn("[AUTH] /auth/me fetch failed:", err);
+          sessionStorage.setItem("powerbi_authenticated", "true");
+        }
+      }
+      
+      if (tokenParam) {
+        localStorage.setItem("access_token", tokenParam);
+        sessionStorage.setItem("access_token", tokenParam);
       }
       
       setIsVerifying(false);
       
-      // Navigate to dashboard after brief delay
       setTimeout(() => {
         console.log("[AUTH] Navigating to dashboard...");
         navigate('/dashboard', { replace: true });
