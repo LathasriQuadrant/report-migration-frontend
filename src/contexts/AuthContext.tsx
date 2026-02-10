@@ -72,6 +72,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, []);
 
+  // Listen for cross-tab auth changes (login happens in separate tab)
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "user_details" && e.newValue) {
+        try {
+          const userData = JSON.parse(e.newValue);
+          setUser(userData);
+          sessionStorage.setItem("powerbi_authenticated", "true");
+          sessionStorage.setItem("azure_user_name", userData.name || "");
+          sessionStorage.setItem("azure_user_email", userData.email || "");
+        } catch (err) {
+          // ignore parse errors
+        }
+      }
+      if (e.key === "access_token" && e.newValue) {
+        sessionStorage.setItem("access_token", e.newValue);
+        sessionStorage.setItem("powerbi_authenticated", "true");
+        // If user not yet set, try loading from localStorage
+        if (!user) {
+          checkSessionAuth();
+        }
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, [user]);
+
   const logout = () => {
     setUser(null);
     sessionStorage.removeItem("powerbi_authenticated");
