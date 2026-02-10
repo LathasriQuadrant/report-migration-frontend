@@ -275,8 +275,9 @@ const DestinationWorkspaceSelection = () => {
 
   return (
     <AppLayout>
-      {/* 🔴 UI CODE UNCHANGED 🔴 */}
-      {/* Your existing JSX stays exactly the same */}
+      <div className="space-y-6">
+        <p className="text-muted-foreground">Workspace selection content goes here.</p>
+      </div>
     </AppLayout>
   );
 };
