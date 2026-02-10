@@ -19,20 +19,31 @@ const Login = () => {
     }
   }, [isAuthenticated, navigate]);
 
-  // Poll for authentication completion when waiting
+  // Listen for authentication completion via storage event or polling
   useEffect(() => {
     if (!isWaiting) return;
 
+    // Listen for localStorage changes from the auth success tab
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === "powerbi_access_token" && e.newValue) {
+        navigate("/dashboard", { replace: true });
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+
     const interval = setInterval(() => {
-      // Check if user is now authenticated (set via callback)
       const isAuthed = sessionStorage.getItem("powerbi_authenticated") === "true";
-      if (isAuthed) {
+      const hasToken = localStorage.getItem("powerbi_access_token");
+      if (isAuthed || hasToken) {
         navigate("/dashboard", { replace: true });
         clearInterval(interval);
       }
     }, 1000);
 
-    return () => clearInterval(interval);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      clearInterval(interval);
+    };
   }, [isWaiting, navigate]);
 
   const handleAzureSignIn = () => {
