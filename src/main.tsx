@@ -1,5 +1,11 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import { AuthProvider } from "./contexts/AuthContext";
 
-createRoot(document.getElementById("root")!).render(<App />);
+// AuthProvider must wrap App for useAuth to work globally
+createRoot(document.getElementById("root")!).render(
+  <AuthProvider>
+    <App />
+  </AuthProvider>
+);
