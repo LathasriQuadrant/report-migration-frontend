@@ -1,35 +1,58 @@
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
 /**
  * This page handles the callback from Azure AD authentication.
- * The backend has already stored the access_token in the server-side session.
- * We just mark the frontend as authenticated and redirect to dashboard.
+ * Reads user data from URL query param and redirects to dashboard.
  */
 const PowerBIAuthSuccess = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { setUserFromCallback } = useAuth();
   const [isVerifying, setIsVerifying] = useState(true);
 
   useEffect(() => {
-    // Backend session now holds the access_token.
-    // Mark frontend as authenticated and redirect.
-    sessionStorage.setItem("powerbi_authenticated", "true");
-
-    setUserFromCallback({
-      id: "1",
-      name: "Power BI User",
-      email: "",
-    });
-
-    setIsVerifying(false);
-
-    setTimeout(() => {
-      navigate("/dashboard", { replace: true });
-    }, 500);
-  }, [setUserFromCallback, navigate]);
+    const processAuth = () => {
+      // Read user from URL query param
+      const userParam = searchParams.get("user");
+      
+      if (userParam) {
+        try {
+          const userData = JSON.parse(decodeURIComponent(userParam));
+          
+          // Store user details via AuthContext
+          setUserFromCallback({
+            id: userData.oid || "1",
+            name: userData.name || "User",
+            email: userData.email || "",
+            jobTitle: userData.jobTitle || "",
+            tenantId: userData.tenant || "",
+            preferredUsername: userData.email || "",
+          });
+          
+          console.log("User authenticated from callback:", userData.name);
+        } catch (error) {
+          console.error("Failed to parse user data:", error);
+          // Set basic auth flag even if parsing fails
+          sessionStorage.setItem("powerbi_authenticated", "true");
+        }
+      } else {
+        // No user param, but still mark as authenticated
+        sessionStorage.setItem("powerbi_authenticated", "true");
+      }
+      
+      setIsVerifying(false);
+      
+      // Navigate to dashboard
+      setTimeout(() => {
+        navigate('/dashboard', { replace: true });
+      }, 300);
+    };
+    
+    processAuth();
+  }, [searchParams, setUserFromCallback, navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
@@ -45,7 +68,7 @@ const PowerBIAuthSuccess = () => {
           {isVerifying ? "Verifying..." : "Authentication Successful"}
         </h2>
         <p className="text-muted-foreground">
-          {isVerifying
+          {isVerifying 
             ? "Please wait while we verify your credentials..."
             : "Redirecting to dashboard..."}
         </p>
