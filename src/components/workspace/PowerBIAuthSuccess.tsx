@@ -46,7 +46,7 @@ const PowerBIAuthSuccess = () => {
             name: userData.name || "User",
             email: userData.email || "",
             jobTitle: userData.jobTitle || "",
-            tenantId: userData.tid || userData.tenant_id || "",
+            tenantId: userData.tenant || userData.tid || userData.tenant_id || "",
             preferredUsername: userData.email || "",
           });
         } catch (error) {
