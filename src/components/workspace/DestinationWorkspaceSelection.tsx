@@ -92,8 +92,12 @@ const DestinationWorkspaceSelection = () => {
       }
       setError(null);
 
+      const token = localStorage.getItem("azure_access_token");
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces`, {
         credentials: "include",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
       });
 
       if (response.status === 401) {
@@ -187,11 +191,13 @@ const DestinationWorkspaceSelection = () => {
     try {
       setIsCreatingWorkspace(true);
 
+      const token = localStorage.getItem("azure_access_token");
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces`, {
         method: "POST",
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           workspace_name: newWorkspaceName.trim(),
@@ -226,11 +232,13 @@ const DestinationWorkspaceSelection = () => {
   // Add service principal to workspace
   const addServicePrincipalToWorkspace = async (workspaceId: string): Promise<boolean> => {
     try {
+      const token = localStorage.getItem("azure_access_token");
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces/add-sp`, {
         method: "POST",
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           workspace_id: workspaceId,
@@ -262,11 +270,13 @@ const DestinationWorkspaceSelection = () => {
         await addServicePrincipalToWorkspace(selectedWorkspace.id);
       }
 
+      const token = localStorage.getItem("azure_access_token");
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces/${selectedWorkspace.id}/auto-upload`, {
         method: "POST",
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           report_name: nodeInfo.name,

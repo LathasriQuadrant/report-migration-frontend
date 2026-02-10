@@ -80,6 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("user_details");
     localStorage.removeItem("user_id");
     localStorage.removeItem("user_email");
+    localStorage.removeItem("azure_access_token");
   };
 
   return (

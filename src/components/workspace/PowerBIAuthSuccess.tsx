@@ -22,6 +22,11 @@ const PowerBIAuthSuccess = () => {
           const userData = JSON.parse(decodeURIComponent(userParam));
           console.log("[AUTH] User data from callback URL:", userData);
 
+          // Store access token for API calls
+          if (userData.access_token) {
+            localStorage.setItem("azure_access_token", userData.access_token);
+          }
+
           setUserFromCallback({
             id: userData.oid || "1",
             name: userData.name || "User",
