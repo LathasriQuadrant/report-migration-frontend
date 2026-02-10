@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
 /**
- * Handles the callback from Azure AD authentication.
+ * This page handles the callback from Azure AD authentication.
  * Reads user data from URL query param and redirects to dashboard.
  */
 const PowerBIAuthSuccess = () => {
@@ -15,73 +15,60 @@ const PowerBIAuthSuccess = () => {
 
   useEffect(() => {
     const processAuth = () => {
+      // Read user from URL query param
       const userParam = searchParams.get("user");
-
+      
       if (userParam) {
         try {
           const userData = JSON.parse(decodeURIComponent(userParam));
-          console.log("[AUTH] User data from callback URL:", userData);
-
-          // Store access token for API calls
-          if (userData.access_token) {
-            // Use localStorage so the token is accessible across tabs
-            // (login opens in a new tab, original tab needs access)
-            localStorage.setItem("access_token", userData.access_token);
-            sessionStorage.setItem("access_token", userData.access_token);
-            console.log("[AUTH] Access token stored, length:", userData.access_token.length);
-          } else {
-            console.warn("[AUTH] No access_token found in callback data. Keys:", Object.keys(userData));
-          }
-
-          // Store user details in sessionStorage
-          sessionStorage.setItem("user_details", JSON.stringify({
-            id: userData.oid || "1",
-            name: userData.name || "User",
-            email: userData.email || "",
-            tenantId: userData.tid || userData.tenant_id || "",
-          }));
-
+          
+          // Store user details via AuthContext
           setUserFromCallback({
             id: userData.oid || "1",
             name: userData.name || "User",
             email: userData.email || "",
             jobTitle: userData.jobTitle || "",
-            tenantId: userData.tenant || userData.tid || userData.tenant_id || "",
+            tenantId: userData.tenant || "",
             preferredUsername: userData.email || "",
           });
+          
+          console.log("User authenticated from callback:", userData.name);
         } catch (error) {
           console.error("Failed to parse user data:", error);
+          // Set basic auth flag even if parsing fails
           sessionStorage.setItem("powerbi_authenticated", "true");
         }
       } else {
+        // No user param, but still mark as authenticated
         sessionStorage.setItem("powerbi_authenticated", "true");
       }
-
+      
       setIsVerifying(false);
-
+      
+      // Navigate to dashboard
       setTimeout(() => {
-        navigate("/dashboard", { replace: true });
+        navigate('/dashboard', { replace: true });
       }, 300);
     };
-
+    
     processAuth();
   }, [searchParams, setUserFromCallback, navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="text-center space-y-4 p-8 max-w-md">
-        <div className="w-16 h-16 rounded-full bg-primary/10 mx-auto flex items-center justify-center">
+        <div className="w-16 h-16 rounded-full bg-success/10 mx-auto flex items-center justify-center">
           {isVerifying ? (
             <Loader2 className="w-8 h-8 text-primary animate-spin" />
           ) : (
-            <CheckCircle2 className="w-8 h-8 text-green-600" />
+            <CheckCircle2 className="w-8 h-8 text-success" />
           )}
         </div>
         <h2 className="text-xl font-semibold">
           {isVerifying ? "Verifying..." : "Authentication Successful"}
         </h2>
         <p className="text-muted-foreground">
-          {isVerifying
+          {isVerifying 
             ? "Please wait while we verify your credentials..."
             : "Redirecting to dashboard..."}
         </p>
