@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Shield, Zap, Clock, ArrowLeft, ExternalLink, Loader2 } from "lucide-react";
@@ -9,9 +9,8 @@ const LOGIN_URL = `${BACKEND_BASE_URL}/login`;
 
 const Login = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, checkAuth } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [isWaiting, setIsWaiting] = useState(false);
-  const [loginWindow, setLoginWindow] = useState<Window | null>(null);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -20,45 +19,25 @@ const Login = () => {
     }
   }, [isAuthenticated, navigate]);
 
-  // Check if auth completed
-  const checkAuthCompletion = useCallback(async () => {
-    const isAuthed = await checkAuth();
-    if (isAuthed) {
-      navigate("/dashboard", { replace: true });
-      return true;
-    }
-    return false;
-  }, [checkAuth, navigate]);
-
   // Poll for authentication completion when waiting
   useEffect(() => {
     if (!isWaiting) return;
 
-    const interval = setInterval(async () => {
-      if (loginWindow && loginWindow.closed) {
-        const isAuthed = await checkAuthCompletion();
-        if (!isAuthed) {
-          setIsWaiting(false);
-          setLoginWindow(null);
-        }
-        clearInterval(interval);
-        return;
-      }
-
-      const isAuthed = await checkAuthCompletion();
+    const interval = setInterval(() => {
+      // Check if user is now authenticated (set via callback)
+      const isAuthed = sessionStorage.getItem("powerbi_authenticated") === "true";
       if (isAuthed) {
-        loginWindow?.close();
+        navigate("/dashboard", { replace: true });
         clearInterval(interval);
       }
-    }, 1500);
+    }, 1000);
 
     return () => clearInterval(interval);
-  }, [isWaiting, loginWindow, checkAuthCompletion]);
+  }, [isWaiting, navigate]);
 
   const handleAzureSignIn = () => {
     setIsWaiting(true);
-    const newWindow = window.open(LOGIN_URL, "_blank", "noopener");
-    setLoginWindow(newWindow);
+    window.open(LOGIN_URL, "_blank", "noopener");
   };
 
   return (
@@ -187,7 +166,6 @@ const Login = () => {
                     size="sm"
                     onClick={() => {
                       setIsWaiting(false);
-                      setLoginWindow(null);
                     }}
                   >
                     Cancel
