@@ -23,6 +23,14 @@ const Login = () => {
   useEffect(() => {
     if (!isWaiting) return;
 
+    // Listen for localStorage changes from the auth success tab
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === "user_details" && e.newValue) {
+        navigate("/dashboard", { replace: true });
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+
     const interval = setInterval(() => {
       // Check if user is now authenticated (set via callback)
       const isAuthed = sessionStorage.getItem("powerbi_authenticated") === "true";
@@ -32,7 +40,10 @@ const Login = () => {
       }
     }, 1000);
 
-    return () => clearInterval(interval);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      clearInterval(interval);
+    };
   }, [isWaiting, navigate]);
 
   const handleAzureSignIn = () => {
