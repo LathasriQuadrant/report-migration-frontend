@@ -19,16 +19,31 @@ const Login = () => {
     }
   }, [isAuthenticated, navigate]);
 
-  // Poll for authentication completion when waiting
+  // Poll for authentication completion when waiting (cross-tab via localStorage)
   useEffect(() => {
     if (!isWaiting) return;
 
     const interval = setInterval(() => {
-      // Check if user is now authenticated (set via callback)
+      const hasToken = localStorage.getItem("access_token");
       const isAuthed = sessionStorage.getItem("powerbi_authenticated") === "true";
-      if (isAuthed) {
-        navigate("/dashboard", { replace: true });
+      if (hasToken || isAuthed) {
+        // Sync token to sessionStorage if needed
+        if (hasToken) {
+          sessionStorage.setItem("access_token", hasToken);
+          sessionStorage.setItem("powerbi_authenticated", "true");
+        }
+        // Reload user details from localStorage
+        const cachedDetails = localStorage.getItem("user_details");
+        if (cachedDetails) {
+          try {
+            const userData = JSON.parse(cachedDetails);
+            // Re-trigger auth context
+            sessionStorage.setItem("azure_user_name", userData.name || "");
+            sessionStorage.setItem("azure_user_email", userData.email || "");
+          } catch (e) {}
+        }
         clearInterval(interval);
+        navigate("/dashboard", { replace: true });
       }
     }, 1000);
 

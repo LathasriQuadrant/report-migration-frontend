@@ -22,33 +22,43 @@ const PowerBIAuthSuccess = () => {
         try {
           const userData = JSON.parse(decodeURIComponent(userParam));
           
+          // Persist access_token so the original Login tab can detect auth
+          if (userData.access_token) {
+            localStorage.setItem("access_token", userData.access_token);
+            sessionStorage.setItem("access_token", userData.access_token);
+            console.log("[AUTH] Access token persisted");
+          }
+          
           // Store user details via AuthContext
-          setUserFromCallback({
+          const userDetails = {
             id: userData.oid || "1",
             name: userData.name || "User",
-            email: userData.email || "",
+            email: userData.email || userData.preferredUsername || "",
             jobTitle: userData.jobTitle || "",
-            tenantId: userData.tenant || "",
-            preferredUsername: userData.email || "",
-          });
+            tenantId: userData.tenant || userData.tid || userData.tenant_id || "",
+            preferredUsername: userData.preferredUsername || userData.email || "",
+          };
           
-          console.log("User authenticated from callback:", userData.name);
+          setUserFromCallback(userDetails);
+          
+          console.log("[AUTH] User authenticated from callback:", userDetails.name, userDetails.email);
         } catch (error) {
-          console.error("Failed to parse user data:", error);
-          // Set basic auth flag even if parsing fails
+          console.error("[AUTH] Failed to parse user data:", error);
           sessionStorage.setItem("powerbi_authenticated", "true");
         }
       } else {
         // No user param, but still mark as authenticated
         sessionStorage.setItem("powerbi_authenticated", "true");
+        console.log("[AUTH] No user param, marked as authenticated");
       }
       
       setIsVerifying(false);
       
-      // Navigate to dashboard
+      // Navigate to dashboard after brief delay
       setTimeout(() => {
+        console.log("[AUTH] Navigating to dashboard...");
         navigate('/dashboard', { replace: true });
-      }, 300);
+      }, 500);
     };
     
     processAuth();
