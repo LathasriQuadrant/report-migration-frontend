@@ -5,31 +5,31 @@ import { useAuth } from "@/contexts/AuthContext";
 
 /**
  * This page handles the callback from Azure AD authentication.
- * The backend has already stored the access_token in the server-side session.
- * We just mark the frontend as authenticated and redirect to dashboard.
+ * Automatically redirects to dashboard after successful auth.
  */
 const PowerBIAuthSuccess = () => {
   const navigate = useNavigate();
-  const { setUserFromCallback } = useAuth();
+  const { checkAuth } = useAuth();
   const [isVerifying, setIsVerifying] = useState(true);
 
   useEffect(() => {
-    // Backend session now holds the access_token.
-    // Mark frontend as authenticated and redirect.
-    sessionStorage.setItem("powerbi_authenticated", "true");
-
-    setUserFromCallback({
-      id: "1",
-      name: "Power BI User",
-      email: "",
-    });
-
-    setIsVerifying(false);
-
-    setTimeout(() => {
-      navigate("/dashboard", { replace: true });
-    }, 500);
-  }, [setUserFromCallback, navigate]);
+    const verifyAndRedirect = async () => {
+      // Mark as authenticated in session storage
+      sessionStorage.setItem("powerbi_authenticated", "true");
+      
+      // Verify auth with backend and update context
+      await checkAuth();
+      
+      setIsVerifying(false);
+      
+      // Redirect to dashboard after short delay
+      setTimeout(() => {
+        navigate('/dashboard', { replace: true });
+      }, 1500);
+    };
+    
+    verifyAndRedirect();
+  }, [checkAuth, navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
@@ -45,7 +45,7 @@ const PowerBIAuthSuccess = () => {
           {isVerifying ? "Verifying..." : "Authentication Successful"}
         </h2>
         <p className="text-muted-foreground">
-          {isVerifying
+          {isVerifying 
             ? "Please wait while we verify your credentials..."
             : "Redirecting to dashboard..."}
         </p>

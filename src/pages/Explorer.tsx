@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Search, RefreshCw, ChevronRight, LayoutGrid, List, BookOpen } from "lucide-react";
+ import { ArrowLeft, Search, RefreshCw, ChevronRight, LayoutGrid, List, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import TreeView from "@/components/explorer/TreeView";
@@ -164,9 +164,9 @@ const Explorer = () => {
           body: JSON.stringify({
             api_token: token,
             workbook_id: selectedWorkbook.id,
-            file_name: `${selectedWorkbook.name}.twbx`,
+            name: `${selectedWorkbook.name}.twbx`,
           }),
-        },
+        }
       );
 
       if (!downloadWorkbookResponse.ok) {
@@ -186,7 +186,7 @@ const Explorer = () => {
             api_token: token,
             workbook_id: selectedWorkbook.id,
           }),
-        },
+        }
       );
 
       if (!downloadDatasourcesResponse.ok) {
@@ -197,79 +197,23 @@ const Explorer = () => {
       console.log("Datasources downloaded:", downloadDatasourcesData);
 
       // Step 3: Extract data
-      // Add this to Explorer.tsx - in the handleMigrateWorkbook function
-      // Replace the Step 3 extract data section with this:
-
-      // Step 3: Extract data - WITH DETAILED LOGGING
-      const blobPath = `${selectedWorkbook.name}.twbx`;
-      console.log("[FRONTEND] === EXTRACT DATA DEBUG ===");
-      console.log("[FRONTEND] Blob path being sent:", blobPath);
-      console.log("[FRONTEND] Full request body:", {
-        blob_path: blobPath,
-      });
-
       const extractDataResponse = await fetch(
-        "https://dataset-extraction2-gbdnhcd0dxeaf6df.eastus-01.azurewebsites.net/extract-data",
+        "https://dataset-extraction-b0erfxbtereygmgz.eastus-01.azurewebsites.net/extract-data",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            blob_path: blobPath,
+            blob_path: `${selectedWorkbook.name}.twbx`,
           }),
-        },
+        }
       );
 
       if (!extractDataResponse.ok) {
-        console.error("[FRONTEND] Extract API returned error:", extractDataResponse.status);
         throw new Error("Failed to extract data");
       }
 
       const extractDataResult = await extractDataResponse.json();
-      console.log("[FRONTEND] Extract response received:");
-      console.log("[FRONTEND] Tables count:", extractDataResult.tables?.length || 0);
-      console.log("[FRONTEND] CSV files count:", extractDataResult.output_files?.length || 0);
-      console.log("[FRONTEND] Full response:", extractDataResult);
-
-      if (extractDataResult.error) {
-        console.error("[FRONTEND] Backend returned error:", extractDataResult.error);
-        throw new Error(extractDataResult.error);
-      }
-
-      // Persist and expose the output location so you can verify the folder contents.
-      const outputFiles: string[] = Array.isArray(extractDataResult.output_files) ? extractDataResult.output_files : [];
-      const inferredFolderFromFirstUrl = outputFiles[0]
-        ? outputFiles[0].slice(0, outputFiles[0].lastIndexOf("/") + 1)
-        : "";
-      const outputFolderUrl =
-        inferredFolderFromFirstUrl ||
-        `https://tablueatopowerbi.blob.core.windows.net/tableau-datasources/${encodeURIComponent(selectedWorkbook.name)}/`;
-
-      sessionStorage.setItem("extraction_output_files", JSON.stringify(outputFiles));
-      sessionStorage.setItem("extraction_output_folder", outputFolderUrl);
-
-      console.log("[FRONTEND] Output folder URL:", outputFolderUrl);
-      console.log("[FRONTEND] Output files:", outputFiles);
-
-      // Log extraction results
-      const tableCount = extractDataResult.tables?.length || 0;
-      console.log(`[FRONTEND] ✅ Extracted ${tableCount} table(s):`, extractDataResult.tables?.map((t: any) => t.name || t) || []);
-      console.log(`[FRONTEND] ✅ Generated ${outputFiles.length} CSV file(s):`, outputFiles);
-      //   "https://dataset-extraction2-gbdnhcd0dxeaf6df.eastus-01.azurewebsites.net/extract-data",
-      //   {
-      //     method: "POST",
-      //     headers: { "Content-Type": "application/json" },
-      //     body: JSON.stringify({
-      //       blob_path: `${selectedWorkbook.name}.twbx`,
-      //     }),
-      //   },
-      // );
-
-      // if (!extractDataResponse.ok) {
-      //   throw new Error("Failed to extract data");
-      // }
-
-      // const extractDataResult = await extractDataResponse.json();
-      // console.log("Data extracted:", extractDataResult);
+      console.log("Data extracted:", extractDataResult);
 
       // Store workbook data in session storage
       const workbookData = {
@@ -327,9 +271,9 @@ const Explorer = () => {
           body: JSON.stringify({
             api_token: token,
             workbook_id: selectedNode.id,
-            file_name: `${selectedNode.name}.twbx`,
+            name: `${selectedNode.name}.twbx`,
           }),
-        },
+        }
       );
 
       if (!downloadWorkbookResponse.ok) {
@@ -349,7 +293,7 @@ const Explorer = () => {
             api_token: token,
             workbook_id: selectedNode.id,
           }),
-        },
+        }
       );
 
       if (!downloadDatasourcesResponse.ok) {
@@ -361,14 +305,14 @@ const Explorer = () => {
 
       // Step 3: Extract data
       const extractDataResponse = await fetch(
-        "https://dataset-extraction2-gbdnhcd0dxeaf6df.eastus-01.azurewebsites.net/extract-data",
+        "https://dataset-extraction-b0erfxbtereygmgz.eastus-01.azurewebsites.net/extract-data",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             blob_path: `${selectedNode.name}.twbx`,
           }),
-        },
+        }
       );
 
       if (!extractDataResponse.ok) {
@@ -378,37 +322,23 @@ const Explorer = () => {
       const extractDataResult = await extractDataResponse.json();
       console.log("Data extracted:", extractDataResult);
 
-      const outputFiles: string[] = Array.isArray(extractDataResult.output_files) ? extractDataResult.output_files : [];
-      const inferredFolderFromFirstUrl = outputFiles[0]
-        ? outputFiles[0].slice(0, outputFiles[0].lastIndexOf("/") + 1)
-        : "";
-      const outputFolderUrl =
-        inferredFolderFromFirstUrl ||
-        `https://tablueatopowerbi.blob.core.windows.net/tableau-datasources/${encodeURIComponent(selectedNode.name)}/`;
-
-      sessionStorage.setItem("extraction_output_files", JSON.stringify(outputFiles));
-      sessionStorage.setItem("extraction_output_folder", outputFolderUrl);
-
-      console.log("[FRONTEND] Output folder URL:", outputFolderUrl);
-      console.log("[FRONTEND] Output files:", outputFiles);
-
-      // Store selected node data in session storage
-      const nodeData = {
-        id: selectedNode.id,
-        name: selectedNode.name,
-        type: selectedNode.type,
-      };
-      sessionStorage.setItem("selected_workbook", JSON.stringify(nodeData));
+    // Store selected node data in session storage
+    const nodeData = {
+      id: selectedNode.id,
+      name: selectedNode.name,
+      type: selectedNode.type,
+    };
+    sessionStorage.setItem("selected_workbook", JSON.stringify(nodeData));
 
       toast({
         title: "Preparation complete",
         description: "Ready to select destination workspace",
       });
 
-      // Navigate to workspace selection
-      navigate("/workspace-selection", {
-        state: { node: selectedNode, source: sourceId },
-      });
+    // Navigate to workspace selection
+    navigate("/workspace-selection", {
+      state: { node: selectedNode, source: sourceId },
+    });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Migration preparation failed";
       toast({
