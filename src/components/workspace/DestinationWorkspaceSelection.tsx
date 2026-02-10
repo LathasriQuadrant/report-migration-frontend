@@ -78,7 +78,7 @@ const DestinationWorkspaceSelection = () => {
   const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
 
   // Get auth state from context
-  const { isAuthenticated, isLoading: isAuthLoading, accessToken } = useAuth();
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
 
   // Auto-upload state
   const [isUploading, setIsUploading] = useState(false);
@@ -92,14 +92,8 @@ const DestinationWorkspaceSelection = () => {
       }
       setError(null);
 
-      const headers: Record<string, string> = {};
-      if (accessToken) {
-        headers["Authorization"] = `Bearer ${accessToken}`;
-      }
-
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces`, {
         credentials: "include",
-        headers,
       });
 
       if (response.status === 401) {
@@ -198,7 +192,6 @@ const DestinationWorkspaceSelection = () => {
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          ...(accessToken ? { "Authorization": `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify({
           workspace_name: newWorkspaceName.trim(),
@@ -238,7 +231,6 @@ const DestinationWorkspaceSelection = () => {
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          ...(accessToken ? { "Authorization": `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify({
           workspace_id: workspaceId,
@@ -275,7 +267,6 @@ const DestinationWorkspaceSelection = () => {
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          ...(accessToken ? { "Authorization": `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify({
           report_name: nodeInfo.name,
