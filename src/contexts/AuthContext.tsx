@@ -18,15 +18,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const isCheckingRef = useRef(false);
 
-  // Single source of truth: call /auth/me to verify session cookie
   const checkAuth = useCallback(async (): Promise<boolean> => {
-    // Prevent concurrent calls (race condition prevention)
     if (isCheckingRef.current) return !!user;
     isCheckingRef.current = true;
 
     try {
       const response = await fetch(`${BACKEND_BASE_URL}/auth/me`, {
+        method: "GET",
         credentials: "include",
+        headers: {
+          "Accept": "application/json",
+        },
       });
 
       if (response.ok) {
@@ -36,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           name: userData.name || "User",
           email: userData.email || "",
         });
+        isCheckingRef.current = false;
         return true;
       }
     } catch (error) {
@@ -43,10 +46,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     setUser(null);
+    isCheckingRef.current = false;
     return false;
   }, []);
 
-  // On mount: verify session with backend
+  // On mount: verify session
   useEffect(() => {
     const initAuth = async () => {
       setIsLoading(true);
@@ -56,25 +60,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initAuth();
   }, [checkAuth]);
 
-  // Listen for pbi_login_sync from popup tab
+  // Listen for "pbi_auth_success" from the popup tab
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "pbi_login_sync" && e.newValue) {
-        // Wait 500ms for cookie propagation, then verify
-        setTimeout(async () => {
+      if (e.key === "pbi_auth_success") {
+        const recheck = async () => {
           setIsLoading(true);
           await checkAuth();
           setIsLoading(false);
-          // Clean up the sync flag
-          localStorage.removeItem("pbi_login_sync");
-        }, 500);
+          localStorage.removeItem("pbi_auth_success");
+        };
+        recheck();
       }
     };
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
   }, [checkAuth]);
 
-  // Global 401 handler: listen for custom event from API calls
+  // Global 401 handler
   useEffect(() => {
     const handleUnauthorized = () => {
       setUser(null);
@@ -93,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error("Logout request failed:", error);
     }
     setUser(null);
-    localStorage.removeItem("pbi_login_sync");
+    localStorage.removeItem("pbi_auth_success");
   };
 
   return (
