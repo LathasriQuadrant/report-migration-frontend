@@ -56,12 +56,6 @@ const Header = () => {
             <div className="px-3 py-2">
               <p className="text-sm font-medium">{user?.name}</p>
               <p className="text-xs text-muted-foreground">{user?.email}</p>
-              {user?.designation && (
-                <p className="text-xs text-muted-foreground mt-0.5">{user.designation}</p>
-              )}
-              {user?.office_location && (
-                <p className="text-xs text-muted-foreground">{user.office_location}</p>
-              )}
             </div>
             <DropdownMenuSeparator />
             <DropdownMenuItem>
