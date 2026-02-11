@@ -1,26 +1,26 @@
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
 
 /**
- * Callback page after Azure AD auth.
- * The backend redirects here after setting the session cookie.
- * We mark sessionStorage and navigate to dashboard.
+ * Callback page after Azure AD auth (opens in the new tab).
+ * Broadcasts auth success to the original tab via BroadcastChannel, then closes.
  */
 const PowerBIAuthSuccess = () => {
-  const navigate = useNavigate();
-  const { markAuthenticated } = useAuth();
   const [isDone, setIsDone] = useState(false);
 
   useEffect(() => {
-    markAuthenticated();
+    // Notify the original login tab
+    const channel = new BroadcastChannel("auth_channel");
+    channel.postMessage("auth_success");
+    channel.close();
+
     setIsDone(true);
 
+    // Close this tab after a short delay
     setTimeout(() => {
-      navigate("/dashboard", { replace: true });
-    }, 500);
-  }, [markAuthenticated, navigate]);
+      window.close();
+    }, 1500);
+  }, []);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
@@ -36,7 +36,7 @@ const PowerBIAuthSuccess = () => {
           {isDone ? "Authentication Successful" : "Verifying..."}
         </h2>
         <p className="text-muted-foreground">
-          {isDone ? "Redirecting to dashboard..." : "Please wait..."}
+          {isDone ? "You can close this tab." : "Please wait..."}
         </p>
       </div>
     </div>
