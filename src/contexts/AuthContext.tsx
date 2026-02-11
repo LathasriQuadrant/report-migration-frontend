@@ -1,48 +1,84 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
-const STATIC_USER = {
-  name: "Power BI User",
-  email: "user@organization.com",
-};
+const BACKEND_BASE_URL = "https://powerbi-azure-auth-app-e6dtdsb2ccawg9cy.eastus-01.azurewebsites.net";
+
+interface UserInfo {
+  name: string;
+  email: string;
+}
+
+const STATIC_USER: UserInfo = { name: "Power BI User", email: "" };
 
 interface AuthContextType {
-  user: typeof STATIC_USER | null;
+  user: UserInfo | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  markAuthenticated: () => void;
+  checkAuth: () => Promise<void>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState<UserInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const markAuthenticated = () => {
-    localStorage.setItem("powerbi_authenticated", "true");
-    setIsAuthenticated(true);
+  const checkAuth = async () => {
+    // Quick check: if sessionStorage flag is set, trust it
+    if (sessionStorage.getItem("powerbi_authenticated") === "true") {
+      setUser(STATIC_USER);
+      setIsLoading(false);
+      return;
+    }
+
+    // Otherwise verify with backend session cookie
+    try {
+      const res = await fetch(`${BACKEND_BASE_URL}/auth/me`, {
+        credentials: "include",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        sessionStorage.setItem("powerbi_authenticated", "true");
+        setUser({ name: data.name || "Power BI User", email: data.email || "" });
+      } else {
+        sessionStorage.removeItem("powerbi_authenticated");
+        setUser(null);
+      }
+    } catch {
+      // If backend unreachable, check sessionStorage only
+      if (sessionStorage.getItem("powerbi_authenticated") === "true") {
+        setUser(STATIC_USER);
+      } else {
+        setUser(null);
+      }
+    }
+    setIsLoading(false);
   };
 
-  // Check auth on mount
   useEffect(() => {
-    const isAuthed = localStorage.getItem("powerbi_authenticated") === "true";
-    setIsAuthenticated(isAuthed);
-    setIsLoading(false);
+    checkAuth();
   }, []);
 
-  const logout = () => {
-    setIsAuthenticated(false);
-    localStorage.removeItem("powerbi_authenticated");
+  const logout = async () => {
+    try {
+      await fetch(`${BACKEND_BASE_URL}/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch {
+      // ignore
+    }
+    sessionStorage.removeItem("powerbi_authenticated");
+    setUser(null);
   };
 
   return (
     <AuthContext.Provider
       value={{
-        user: isAuthenticated ? STATIC_USER : null,
-        isAuthenticated,
+        user,
+        isAuthenticated: !!user,
         isLoading,
-        markAuthenticated,
+        checkAuth,
         logout,
       }}
     >
