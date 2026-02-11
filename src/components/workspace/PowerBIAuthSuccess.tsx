@@ -14,18 +14,22 @@ const PowerBIAuthSuccess = () => {
 
   useEffect(() => {
     const verifyAndRedirect = async () => {
-      // Mark as authenticated in session storage
-      sessionStorage.setItem("powerbi_authenticated", "true");
-      
-      // Verify auth with backend and update context
-      await checkAuth();
+      // Call /auth/me to verify session and get user details
+      const isAuthed = await checkAuth();
       
       setIsVerifying(false);
       
-      // Redirect to dashboard after short delay
-      setTimeout(() => {
-        navigate('/dashboard', { replace: true });
-      }, 1500);
+      if (isAuthed) {
+        // Signal other tabs via localStorage
+        localStorage.setItem("user_details", JSON.stringify({
+          name: sessionStorage.getItem("azure_user_name"),
+          email: sessionStorage.getItem("azure_user_email"),
+        }));
+        
+        setTimeout(() => {
+          navigate('/dashboard', { replace: true });
+        }, 1500);
+      }
     };
     
     verifyAndRedirect();
