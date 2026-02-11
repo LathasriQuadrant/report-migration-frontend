@@ -58,9 +58,6 @@ export interface User {
   email: string;
   avatar?: string;
   role?: "admin" | "user";
-  designation?: string;
-  tenant_id?: string;
-  office_location?: string;
 }
 
 // ==============================
