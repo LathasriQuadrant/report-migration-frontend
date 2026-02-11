@@ -92,7 +92,7 @@ const DestinationWorkspaceSelection = () => {
       }
       setError(null);
 
-      const response = await fetch(`${BACKEND_BASE_URL}/workspaces`, {
+      const response = await fetch(`${BACKEND_BASE_URL}/api/workspaces`, {
         credentials: "include",
       });
 
@@ -187,7 +187,7 @@ const DestinationWorkspaceSelection = () => {
     try {
       setIsCreatingWorkspace(true);
 
-      const response = await fetch(`${BACKEND_BASE_URL}/workspaces`, {
+      const response = await fetch(`${BACKEND_BASE_URL}/api/workspaces`, {
         method: "POST",
         credentials: "include",
         headers: {
@@ -226,7 +226,7 @@ const DestinationWorkspaceSelection = () => {
   // Add service principal to workspace
   const addServicePrincipalToWorkspace = async (workspaceId: string): Promise<boolean> => {
     try {
-      const response = await fetch(`${BACKEND_BASE_URL}/workspaces/add-sp`, {
+      const response = await fetch(`${BACKEND_BASE_URL}/api/workspaces/add-sp`, {
         method: "POST",
         credentials: "include",
         headers: {
@@ -267,7 +267,7 @@ const DestinationWorkspaceSelection = () => {
       console.log("Blob folder URL:", blobFolderUrl);
       console.log("Extraction files:", extractionFiles);
 
-      const response = await fetch(`${BACKEND_BASE_URL}/workspaces/${selectedWorkspace.id}/auto-upload`, {
+      const response = await fetch(`${BACKEND_BASE_URL}/api/workspaces/${selectedWorkspace.id}/auto-upload`, {
         method: "POST",
         credentials: "include",
         headers: {
