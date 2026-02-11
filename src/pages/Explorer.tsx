@@ -215,6 +215,19 @@ const Explorer = () => {
       const extractDataResult = await extractDataResponse.json();
       console.log("Data extracted:", extractDataResult);
 
+      // Store extraction output files and folder URL in sessionStorage
+      const outputFiles = extractDataResult.output_files || [];
+      sessionStorage.setItem("extraction_output_files", JSON.stringify(outputFiles));
+
+      // Derive the blob folder URL from the output files
+      if (outputFiles.length > 0) {
+        const firstFileUrl = outputFiles[0];
+        const folderUrl = firstFileUrl.substring(0, firstFileUrl.lastIndexOf("/") + 1);
+        sessionStorage.setItem("extraction_output_folder", folderUrl);
+        console.log("Blob folder URL:", folderUrl);
+        console.log("All extracted files:", outputFiles);
+      }
+
       // Store workbook data in session storage
       const workbookData = {
         id: selectedWorkbook.id,
@@ -321,6 +334,19 @@ const Explorer = () => {
 
       const extractDataResult = await extractDataResponse.json();
       console.log("Data extracted:", extractDataResult);
+
+      // Store extraction output files and folder URL in sessionStorage
+      const outputFiles = extractDataResult.output_files || [];
+      sessionStorage.setItem("extraction_output_files", JSON.stringify(outputFiles));
+
+      // Derive the blob folder URL from the output files
+      if (outputFiles.length > 0) {
+        const firstFileUrl = outputFiles[0];
+        const folderUrl = firstFileUrl.substring(0, firstFileUrl.lastIndexOf("/") + 1);
+        sessionStorage.setItem("extraction_output_folder", folderUrl);
+        console.log("Blob folder URL:", folderUrl);
+        console.log("All extracted files:", outputFiles);
+      }
 
     // Store selected node data in session storage
     const nodeData = {
