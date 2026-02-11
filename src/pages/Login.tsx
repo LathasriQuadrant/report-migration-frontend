@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Shield, Zap, Clock, ArrowLeft, ExternalLink, Loader2 } from "lucide-react";
@@ -9,8 +9,9 @@ const LOGIN_URL = `${BACKEND_BASE_URL}/login`;
 
 const Login = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, setAuthFromCallback } = useAuth();
+  const { isAuthenticated, checkAuth } = useAuth();
   const [isWaiting, setIsWaiting] = useState(false);
+  const [loginWindow, setLoginWindow] = useState<Window | null>(null);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -19,39 +20,45 @@ const Login = () => {
     }
   }, [isAuthenticated, navigate]);
 
-  // Listen for cross-tab auth completion via localStorage/storage event
+  // Check if auth completed
+  const checkAuthCompletion = useCallback(async () => {
+    const isAuthed = await checkAuth();
+    if (isAuthed) {
+      navigate("/dashboard", { replace: true });
+      return true;
+    }
+    return false;
+  }, [checkAuth, navigate]);
+
+  // Poll for authentication completion when waiting
   useEffect(() => {
     if (!isWaiting) return;
 
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "powerbi_auth_complete" && e.newValue === "true") {
-        localStorage.removeItem("powerbi_auth_complete");
-        setAuthFromCallback();
-        navigate("/dashboard", { replace: true });
+    const interval = setInterval(async () => {
+      if (loginWindow && loginWindow.closed) {
+        const isAuthed = await checkAuthCompletion();
+        if (!isAuthed) {
+          setIsWaiting(false);
+          setLoginWindow(null);
+        }
+        clearInterval(interval);
+        return;
       }
-    };
 
-    window.addEventListener("storage", handleStorageChange);
-
-    // Also poll sessionStorage as fallback
-    const interval = setInterval(() => {
-      const isAuthed = sessionStorage.getItem("powerbi_authenticated") === "true";
+      const isAuthed = await checkAuthCompletion();
       if (isAuthed) {
-        setAuthFromCallback();
-        navigate("/dashboard", { replace: true });
+        loginWindow?.close();
         clearInterval(interval);
       }
-    }, 1000);
+    }, 1500);
 
-    return () => {
-      window.removeEventListener("storage", handleStorageChange);
-      clearInterval(interval);
-    };
-  }, [isWaiting, navigate, setAuthFromCallback]);
+    return () => clearInterval(interval);
+  }, [isWaiting, loginWindow, checkAuthCompletion]);
 
   const handleAzureSignIn = () => {
     setIsWaiting(true);
-    window.open(LOGIN_URL, "_blank", "noopener");
+    const newWindow = window.open(LOGIN_URL, "_blank", "noopener");
+    setLoginWindow(newWindow);
   };
 
   return (
@@ -180,6 +187,7 @@ const Login = () => {
                     size="sm"
                     onClick={() => {
                       setIsWaiting(false);
+                      setLoginWindow(null);
                     }}
                   >
                     Cancel

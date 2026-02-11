@@ -77,6 +77,7 @@ const DestinationWorkspaceSelection = () => {
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
 
+  // Get auth state from context
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
 
   // Auto-upload state
