@@ -1,43 +1,95 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Shield, Zap, Clock, ArrowLeft, ExternalLink, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const BACKEND_BASE_URL = "https://powerbi-azure-auth-app-e6dtdsb2ccawg9cy.eastus-01.azurewebsites.net";
-const LOGIN_URL = `${BACKEND_BASE_URL}/auth/login`;
+const LOGIN_URL = `${BACKEND_BASE_URL}/login`;
 
 const Login = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, checkAuth } = useAuth();
   const [isWaiting, setIsWaiting] = useState(false);
+  const [loginWindow, setLoginWindow] = useState<Window | null>(null);
 
   // Redirect if already authenticated
   useEffect(() => {
-    if (!isLoading && isAuthenticated) {
+    if (isAuthenticated) {
       navigate("/dashboard", { replace: true });
     }
-  }, [isAuthenticated, isLoading, navigate]);
+  }, [isAuthenticated, navigate]);
 
-  // When auth context resolves after popup sync, stop waiting
-  useEffect(() => {
-    if (isAuthenticated) {
-      setIsWaiting(false);
+  // Check if auth completed via backend or localStorage (cross-tab)
+  const checkAuthCompletion = useCallback(async () => {
+    // First check localStorage (set by PowerBIAuthSuccess in the popup)
+    const localAuth = localStorage.getItem("powerbi_authenticated");
+    if (localAuth === "true") {
+      const userDetails = localStorage.getItem("user_details");
+      if (userDetails) {
+        const { name, email } = JSON.parse(userDetails);
+        sessionStorage.setItem("powerbi_authenticated", "true");
+        sessionStorage.setItem("azure_user_name", name || "User");
+        sessionStorage.setItem("azure_user_email", email || "");
+      }
+      // Clean up localStorage flags
+      localStorage.removeItem("powerbi_authenticated");
+      localStorage.removeItem("user_details");
+      await checkAuth();
+      navigate("/dashboard", { replace: true });
+      return true;
     }
-  }, [isAuthenticated]);
+
+    // Fallback: try backend session check
+    const isAuthed = await checkAuth();
+    if (isAuthed) {
+      navigate("/dashboard", { replace: true });
+      return true;
+    }
+    return false;
+  }, [checkAuth, navigate]);
+
+  // Listen for storage events from the popup tab
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "powerbi_authenticated" && e.newValue === "true") {
+        checkAuthCompletion();
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, [checkAuthCompletion]);
+
+  // Poll for authentication completion when waiting
+  useEffect(() => {
+    if (!isWaiting) return;
+
+    const interval = setInterval(async () => {
+      if (loginWindow && loginWindow.closed) {
+        const isAuthed = await checkAuthCompletion();
+        if (!isAuthed) {
+          setIsWaiting(false);
+          setLoginWindow(null);
+        }
+        clearInterval(interval);
+        return;
+      }
+
+      const isAuthed = await checkAuthCompletion();
+      if (isAuthed) {
+        loginWindow?.close();
+        clearInterval(interval);
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [isWaiting, loginWindow, checkAuthCompletion]);
 
   const handleAzureSignIn = () => {
     setIsWaiting(true);
-    window.open(LOGIN_URL, "_blank", "noopener");
+    const newWindow = window.open(LOGIN_URL, "_blank", "noopener");
+    setLoginWindow(newWindow);
   };
-
-  if (isLoading) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-background">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-      </div>
-    );
-  }
 
   return (
     <div className="h-screen flex overflow-hidden">
@@ -109,8 +161,9 @@ const Login = () => {
         </div>
       </div>
 
-      {/* Right side - Login */}
+      {/* Right side - Login/Register */}
       <div className="flex-1 lg:w-1/2 flex flex-col bg-background overflow-hidden">
+        {/* Back to home link */}
         <div className="p-4 flex-shrink-0">
           <Link
             to="/"
@@ -126,7 +179,13 @@ const Login = () => {
             {/* Mobile logo */}
             <div className="lg:hidden flex items-center gap-3 mb-8 justify-center">
               <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center">
-                <svg viewBox="0 0 24 24" className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg
+                  viewBox="0 0 24 24"
+                  className="w-5 h-5 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
                   <path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" />
                   <path d="M18 17V9M13 17V5M8 17v-3" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -134,12 +193,16 @@ const Login = () => {
               <span className="text-lg font-semibold text-foreground">ReportFlow</span>
             </div>
 
+            {/* Card Container */}
             <div className="bg-card rounded-xl border border-border enterprise-shadow-lg p-6">
               <div className="text-center mb-5">
                 <h2 className="text-xl font-semibold text-foreground mb-1">Welcome</h2>
-                <p className="text-sm text-muted-foreground">Sign in to continue to ReportFlow</p>
+                <p className="text-sm text-muted-foreground">
+                  Sign in to continue to ReportFlow
+                </p>
               </div>
 
+              {/* Azure AD waiting state */}
               {isWaiting ? (
                 <div className="text-center space-y-4 py-4">
                   <div className="w-16 h-16 rounded-full bg-primary/10 mx-auto flex items-center justify-center">
@@ -149,18 +212,28 @@ const Login = () => {
                     <p className="text-sm font-medium">Waiting for authentication...</p>
                     <p className="text-xs text-muted-foreground mt-1">Complete sign-in in the opened browser tab</p>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => setIsWaiting(false)}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setIsWaiting(false);
+                      setLoginWindow(null);
+                    }}
+                  >
                     Cancel
                   </Button>
                 </div>
               ) : (
-                <Button variant="azure" className="w-full h-11" onClick={handleAzureSignIn}>
-                  <svg className="w-5 h-5 mr-2" viewBox="0 0 21 21" fill="none">
-                    <path d="M10 0v10h10V0H10zm0 11v10h10V11H10zM0 0v10h9V0H0zm0 11v10h9V11H0z" fill="currentColor" />
-                  </svg>
-                  Sign in with Microsoft
-                  <ExternalLink className="w-4 h-4 ml-2" />
-                </Button>
+                <>
+                  {/* Azure AD SSO Button */}
+                  <Button variant="azure" className="w-full h-11" onClick={handleAzureSignIn}>
+                    <svg className="w-5 h-5 mr-2" viewBox="0 0 21 21" fill="none">
+                      <path d="M10 0v10h10V0H10zm0 11v10h10V11H10zM0 0v10h9V0H0zm0 11v10h9V11H0z" fill="currentColor" />
+                    </svg>
+                    Sign in with Microsoft
+                    <ExternalLink className="w-4 h-4 ml-2" />
+                  </Button>
+                </>
               )}
             </div>
 
