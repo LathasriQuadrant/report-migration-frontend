@@ -1,53 +1,44 @@
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
-const BACKEND_BASE_URL = "https://powerbi-azure-auth-app-e6dtdsb2ccawg9cy.eastus-01.azurewebsites.net";
-
 /**
- * This page handles the redirect from Azure AD /auth/callback.
- * Fetches user details from /auth/me, then verifies session via /workspaces.
+ * Handles redirect from /auth/callback which includes user details as query params.
  */
 const PowerBIAuthSuccess = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { checkAuth } = useAuth();
   const [isVerifying, setIsVerifying] = useState(true);
 
   useEffect(() => {
     const verifyAndRedirect = async () => {
-      // Step 1: Fetch user details from /auth/me
-      try {
-        const meResponse = await fetch(`${BACKEND_BASE_URL}/auth/me`, {
-          credentials: "include",
-        });
+      // Extract user details from /auth/callback redirect URL
+      const name = searchParams.get("name");
+      const email = searchParams.get("email");
+      const tid = searchParams.get("tid") || searchParams.get("tenant");
+      const oid = searchParams.get("oid");
 
-        if (meResponse.ok) {
-          const data = await meResponse.json();
-          if (data.name) sessionStorage.setItem("azure_user_name", data.name);
-          if (data.email) sessionStorage.setItem("azure_user_email", data.email);
-          if (data.oid) sessionStorage.setItem("azure_user_oid", data.oid);
-          if (data.tenant) sessionStorage.setItem("azure_user_tid", data.tenant);
+      // Store in sessionStorage
+      if (name) sessionStorage.setItem("azure_user_name", name);
+      if (email) sessionStorage.setItem("azure_user_email", email);
+      if (tid) sessionStorage.setItem("azure_user_tid", tid);
+      if (oid) sessionStorage.setItem("azure_user_oid", oid);
+      sessionStorage.setItem("powerbi_authenticated", "true");
 
-          // Signal other tabs
-          localStorage.setItem("user_details", JSON.stringify(data));
-        }
-      } catch (error) {
-        console.error("Failed to fetch user details:", error);
-      }
+      // Signal other tabs
+      localStorage.setItem("user_details", JSON.stringify({ name, email, tid, oid }));
 
-      // Step 2: Verify session via /workspaces and update auth context
+      // Verify session via /workspaces
       await checkAuth();
 
       setIsVerifying(false);
-
-      setTimeout(() => {
-        navigate('/dashboard', { replace: true });
-      }, 1500);
+      setTimeout(() => navigate('/dashboard', { replace: true }), 1500);
     };
 
     verifyAndRedirect();
-  }, [checkAuth, navigate]);
+  }, [checkAuth, navigate, searchParams]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
