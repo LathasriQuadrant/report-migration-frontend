@@ -43,15 +43,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return false;
   };
 
-  // Check for local (simulated) authentication
+  // Check for local/session-persisted authentication
   const checkLocalAuth = (): boolean => {
-    const isLocalAuth = sessionStorage.getItem("local_authenticated") === "true";
-    if (isLocalAuth) {
+    const isAuth = sessionStorage.getItem("powerbi_authenticated") === "true" ||
+                   sessionStorage.getItem("local_authenticated") === "true";
+    if (isAuth) {
       const storedName = sessionStorage.getItem("azure_user_name");
       const storedEmail = sessionStorage.getItem("azure_user_email");
 
       setUser({
-        id: "1",
+        id: sessionStorage.getItem("azure_user_oid") || "1",
         name: storedName || "User",
         email: storedEmail || "",
       });
