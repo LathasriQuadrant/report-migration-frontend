@@ -176,10 +176,6 @@ const Explorer = () => {
       const downloadWorkbookData = await downloadWorkbookResponse.json();
       console.log("Workbook downloaded:", downloadWorkbookData);
 
-      // Get the blob_path from the download response
-      const blobPath = downloadWorkbookData.blob_path || downloadWorkbookData.file_path || downloadWorkbookData.file_name || `${selectedWorkbook.name}.twbx`;
-      console.log("Using blob_path for extraction:", blobPath);
-
       // Step 2: Download workbook datasources
       const downloadDatasourcesResponse = await fetch(
         "https://tableau-backend-app-hrdxfhfpghf3f0bg.eastus-01.azurewebsites.net/tableau/download_workbook_datasources",
@@ -207,7 +203,7 @@ const Explorer = () => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            blob_path: blobPath,
+            blob_path: `${selectedWorkbook.name}.twbx`,
           }),
         }
       );
@@ -217,11 +213,7 @@ const Explorer = () => {
       }
 
       const extractDataResult = await extractDataResponse.json();
-      console.log("=== Extract Data Response ===");
-      console.log("Full response:", JSON.stringify(extractDataResult, null, 2));
-      console.log("Output folder:", extractDataResult.folder || extractDataResult.output_folder);
-      console.log("Uploaded files:", extractDataResult.files || extractDataResult.uploaded_files);
-      console.log("=============================");
+      console.log("Data extracted:", extractDataResult);
 
       // Store workbook data in session storage
       const workbookData = {
@@ -291,10 +283,6 @@ const Explorer = () => {
       const downloadWorkbookData = await downloadWorkbookResponse.json();
       console.log("Workbook downloaded:", downloadWorkbookData);
 
-      // Get the blob_path from the download response
-      const blobPath = downloadWorkbookData.blob_path || downloadWorkbookData.file_path || downloadWorkbookData.file_name || `${selectedNode.name}.twbx`;
-      console.log("Using blob_path for extraction:", blobPath);
-
       // Step 2: Download workbook datasources
       const downloadDatasourcesResponse = await fetch(
         "https://tableau-backend-app-hrdxfhfpghf3f0bg.eastus-01.azurewebsites.net/tableau/download_workbook_datasources",
@@ -322,7 +310,7 @@ const Explorer = () => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            blob_path: blobPath,
+            blob_path: `${selectedNode.name}.twbx`,
           }),
         }
       );
@@ -332,11 +320,7 @@ const Explorer = () => {
       }
 
       const extractDataResult = await extractDataResponse.json();
-      console.log("=== Extract Data Response ===");
-      console.log("Full response:", JSON.stringify(extractDataResult, null, 2));
-      console.log("Output folder:", extractDataResult.folder || extractDataResult.output_folder);
-      console.log("Uploaded files:", extractDataResult.files || extractDataResult.uploaded_files);
-      console.log("=============================");
+      console.log("Data extracted:", extractDataResult);
 
     // Store selected node data in session storage
     const nodeData = {
