@@ -125,7 +125,11 @@ const Explorer = () => {
 
   // ---------------- Navigation ----------------
   const handleMigrateWorkbook = async () => {
-    if (!selectedWorkbook) return;
+    console.log("[MIGRATE] handleMigrateWorkbook called, selectedWorkbook:", selectedWorkbook);
+    if (!selectedWorkbook) {
+      console.log("[MIGRATE] No workbook selected, returning early");
+      return;
+    }
 
     const findNode = (nodes: TreeNode[]): TreeNode | null => {
       for (const node of nodes) {
@@ -142,6 +146,7 @@ const Explorer = () => {
     if (!workbookNode) return;
 
     const token = sessionStorage.getItem("tableau_api_token");
+    console.log("[MIGRATE] Token exists:", !!token);
     if (!token) {
       toast({
         title: "Session expired",
@@ -153,6 +158,7 @@ const Explorer = () => {
     }
 
     setIsMigrating(true);
+    console.log("[MIGRATE] Starting download_workbook...");
 
     try {
       // Step 1: Download workbook
@@ -263,9 +269,14 @@ const Explorer = () => {
   };
 
   const handleMigrateNode = async () => {
-    if (!selectedNode) return;
+    console.log("[MIGRATE-TREE] handleMigrateNode called, selectedNode:", selectedNode);
+    if (!selectedNode) {
+      console.log("[MIGRATE-TREE] No node selected, returning early");
+      return;
+    }
 
     const token = sessionStorage.getItem("tableau_api_token");
+    console.log("[MIGRATE-TREE] Token exists:", !!token);
     if (!token) {
       toast({
         title: "Session expired",
@@ -277,6 +288,7 @@ const Explorer = () => {
     }
 
     setIsMigrating(true);
+    console.log("[MIGRATE-TREE] Starting download_workbook...");
 
     try {
       // Step 1: Download workbook
