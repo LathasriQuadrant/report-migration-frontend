@@ -27,12 +27,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const data = await response.json();
         if (data && data.name) {
           return {
-            id: data.id || "1",
+            id: data.oid || data.id || "1",
             name: data.name,
             email: data.email || "",
-            designation: data.designation || "",
             tenant_id: data.tenant_id || "",
-            office_location: data.office_location || "",
+            oid: data.oid || "",
           };
         }
       }
