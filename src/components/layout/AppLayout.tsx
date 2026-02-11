@@ -10,7 +10,6 @@ interface AppLayoutProps {
 const AppLayout = ({ children }: AppLayoutProps) => {
   const { isAuthenticated, isLoading } = useAuth();
 
-  // Show loading while checking auth
   if (isLoading) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
