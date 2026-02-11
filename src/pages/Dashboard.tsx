@@ -44,6 +44,7 @@ const Dashboard = () => {
   const [showTableauAuth, setShowTableauAuth] = useState(false);
 
   useEffect(() => {
+    sessionStorage.removeItem("powerbi_authenticated");
     sessionStorage.removeItem("selected_workbook");
   }, []);
 

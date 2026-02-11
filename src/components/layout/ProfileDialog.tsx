@@ -6,7 +6,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Mail, User } from 'lucide-react';
+import { Building2, Mail, User, Briefcase, Hash } from 'lucide-react';
 
 interface ProfileDialogProps {
   open: boolean;
@@ -28,6 +28,9 @@ const ProfileDialog = ({ open, onOpenChange }: ProfileDialogProps) => {
   const profileFields = [
     { label: 'Name', value: user?.name, icon: User },
     { label: 'Email', value: user?.email, icon: Mail },
+    { label: 'Preferred Username', value: user?.preferredUsername || user?.email, icon: Hash },
+    { label: 'Job Title', value: user?.jobTitle || 'Not specified', icon: Briefcase },
+    { label: 'Tenant ID', value: user?.tenantId, icon: Building2 },
   ];
 
   return (
