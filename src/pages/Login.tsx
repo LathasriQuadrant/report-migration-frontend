@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Shield, Zap, Clock, ArrowLeft, ExternalLink, Loader2 } from "lucide-react";
+import { Shield, Zap, Clock, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const BACKEND_BASE_URL = "https://powerbi-azure-auth-app-e6dtdsb2ccawg9cy.eastus-01.azurewebsites.net";
@@ -10,7 +10,6 @@ const LOGIN_URL = `${BACKEND_BASE_URL}/login`;
 const Login = () => {
   const navigate = useNavigate();
   const { isAuthenticated, markAuthenticated } = useAuth();
-  const [isWaiting, setIsWaiting] = useState(false);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -19,23 +18,9 @@ const Login = () => {
     }
   }, [isAuthenticated, navigate]);
 
-  // Poll sessionStorage for auth flag set by the callback tab
-  useEffect(() => {
-    if (!isWaiting) return;
-
-    const interval = setInterval(() => {
-      if (sessionStorage.getItem("powerbi_authenticated") === "true") {
-        markAuthenticated();
-        clearInterval(interval);
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [isWaiting, markAuthenticated]);
-
   const handleAzureSignIn = () => {
-    setIsWaiting(true);
-    window.open(LOGIN_URL, "_blank", "noopener");
+    // Navigate in the same tab so sessionStorage persists through the flow
+    window.location.href = LOGIN_URL;
   };
 
   return (
@@ -149,38 +134,13 @@ const Login = () => {
                 </p>
               </div>
 
-              {/* Azure AD waiting state */}
-              {isWaiting ? (
-                <div className="text-center space-y-4 py-4">
-                  <div className="w-16 h-16 rounded-full bg-primary/10 mx-auto flex items-center justify-center">
-                    <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">Waiting for authentication...</p>
-                    <p className="text-xs text-muted-foreground mt-1">Complete sign-in in the opened browser tab</p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setIsWaiting(false);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  {/* Azure AD SSO Button */}
-                  <Button variant="azure" className="w-full h-11" onClick={handleAzureSignIn}>
-                    <svg className="w-5 h-5 mr-2" viewBox="0 0 21 21" fill="none">
-                      <path d="M10 0v10h10V0H10zm0 11v10h10V11H10zM0 0v10h9V0H0zm0 11v10h9V11H0z" fill="currentColor" />
-                    </svg>
-                    Sign in with Microsoft
-                    <ExternalLink className="w-4 h-4 ml-2" />
-                  </Button>
-                </>
-              )}
+              {/* Azure AD SSO Button */}
+              <Button variant="azure" className="w-full h-11" onClick={handleAzureSignIn}>
+                <svg className="w-5 h-5 mr-2" viewBox="0 0 21 21" fill="none">
+                  <path d="M10 0v10h10V0H10zm0 11v10h10V11H10zM0 0v10h9V0H0zm0 11v10h9V11H0z" fill="currentColor" />
+                </svg>
+                Sign in with Microsoft
+              </Button>
             </div>
 
             <p className="mt-4 text-center text-xs text-muted-foreground">
