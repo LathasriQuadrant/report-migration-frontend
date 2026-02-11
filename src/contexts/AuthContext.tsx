@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from "react";
 import { User } from "@/types/migration";
 
 interface AuthContextType {
@@ -16,77 +16,84 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const isCheckingRef = useRef(false);
 
-  // Check Azure AD authentication status by calling the backend
-  const checkAuth = async (): Promise<boolean> => {
+  // Single source of truth: call /auth/me to verify session cookie
+  const checkAuth = useCallback(async (): Promise<boolean> => {
+    // Prevent concurrent calls (race condition prevention)
+    if (isCheckingRef.current) return !!user;
+    isCheckingRef.current = true;
+
     try {
-      const response = await fetch(`${BACKEND_BASE_URL}/workspaces`, {
+      const response = await fetch(`${BACKEND_BASE_URL}/auth/me`, {
         credentials: "include",
       });
 
       if (response.ok) {
-        // User is authenticated via Azure AD
-        const storedName = sessionStorage.getItem("azure_user_name");
-        const storedEmail = sessionStorage.getItem("azure_user_email");
-
+        const userData = await response.json();
         setUser({
-          id: "1",
-          name: storedName || "User",
-          email: storedEmail || "",
+          id: userData.oid || "1",
+          name: userData.name || "User",
+          email: userData.email || "",
         });
-        sessionStorage.setItem("powerbi_authenticated", "true");
         return true;
       }
     } catch (error) {
-      console.error("Azure AD auth check failed:", error);
+      console.error("Session verification failed:", error);
     }
 
+    setUser(null);
     return false;
-  };
+  }, []);
 
-  // Check for local/session-based authentication
-  const checkLocalAuth = (): boolean => {
-    const isLocalAuth = sessionStorage.getItem("local_authenticated") === "true";
-    const isPowerBIAuth = sessionStorage.getItem("powerbi_authenticated") === "true";
-    if (isLocalAuth || isPowerBIAuth) {
-      const storedName = sessionStorage.getItem("azure_user_name");
-      const storedEmail = sessionStorage.getItem("azure_user_email");
-
-      setUser({
-        id: "1",
-        name: storedName || "User",
-        email: storedEmail || "",
-      });
-      return true;
-    }
-    return false;
-  };
-
-  // Check auth on mount - try local first, then Azure AD
+  // On mount: verify session with backend
   useEffect(() => {
     const initAuth = async () => {
       setIsLoading(true);
-
-      // First check local auth (faster, no network call)
-      if (checkLocalAuth()) {
-        setIsLoading(false);
-        return;
-      }
-
-      // Then check Azure AD auth
       await checkAuth();
       setIsLoading(false);
     };
     initAuth();
+  }, [checkAuth]);
+
+  // Listen for pbi_login_sync from popup tab
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "pbi_login_sync" && e.newValue) {
+        // Wait 500ms for cookie propagation, then verify
+        setTimeout(async () => {
+          setIsLoading(true);
+          await checkAuth();
+          setIsLoading(false);
+          // Clean up the sync flag
+          localStorage.removeItem("pbi_login_sync");
+        }, 500);
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, [checkAuth]);
+
+  // Global 401 handler: listen for custom event from API calls
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setUser(null);
+    };
+    window.addEventListener("auth:unauthorized", handleUnauthorized);
+    return () => window.removeEventListener("auth:unauthorized", handleUnauthorized);
   }, []);
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await fetch(`${BACKEND_BASE_URL}/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch (error) {
+      console.error("Logout request failed:", error);
+    }
     setUser(null);
-    sessionStorage.removeItem("powerbi_authenticated");
-    sessionStorage.removeItem("local_authenticated");
-    sessionStorage.removeItem("azure_user_name");
-    sessionStorage.removeItem("azure_user_email");
-    // Optionally call backend logout endpoint
+    localStorage.removeItem("pbi_login_sync");
   };
 
   return (
