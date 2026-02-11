@@ -9,7 +9,7 @@ const LOGIN_URL = `${BACKEND_BASE_URL}/login`;
 
 const Login = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, checkAuth } = useAuth();
+  const { isAuthenticated, markAuthenticated } = useAuth();
   const [isWaiting, setIsWaiting] = useState(false);
 
   // Redirect if already authenticated
@@ -19,17 +19,19 @@ const Login = () => {
     }
   }, [isAuthenticated, navigate]);
 
-  // Poll for auth completion — the callback tab sets sessionStorage
-  // but sessionStorage is per-tab, so we poll /auth/me via session cookie
+  // Poll sessionStorage for auth flag set by the callback tab
   useEffect(() => {
     if (!isWaiting) return;
 
-    const interval = setInterval(async () => {
-      await checkAuth();
-    }, 2000);
+    const interval = setInterval(() => {
+      if (sessionStorage.getItem("powerbi_authenticated") === "true") {
+        markAuthenticated();
+        clearInterval(interval);
+      }
+    }, 1000);
 
     return () => clearInterval(interval);
-  }, [isWaiting, checkAuth]);
+  }, [isWaiting, markAuthenticated]);
 
   const handleAzureSignIn = () => {
     setIsWaiting(true);

@@ -1,7 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
-const BACKEND_BASE_URL = "https://powerbi-azure-auth-app-e6dtdsb2ccawg9cy.eastus-01.azurewebsites.net";
-
 interface UserInfo {
   name: string;
   email: string;
@@ -13,7 +11,7 @@ interface AuthContextType {
   user: UserInfo | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  checkAuth: () => Promise<void>;
+  markAuthenticated: () => void;
   logout: () => void;
 }
 
@@ -23,41 +21,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const checkAuth = async () => {
-    // Quick check: if sessionStorage flag is set, trust it
-    if (sessionStorage.getItem("powerbi_authenticated") === "true") {
-      setUser(STATIC_USER);
-      setIsLoading(false);
-      return;
-    }
-
-    // Otherwise verify with backend session cookie
-    try {
-      const res = await fetch(`${BACKEND_BASE_URL}/auth/me`, {
-        credentials: "include",
-      });
-      if (res.ok) {
-        const data = await res.json();
-        sessionStorage.setItem("powerbi_authenticated", "true");
-        setUser({ name: data.name || "Power BI User", email: data.email || "" });
-      } else {
-        sessionStorage.removeItem("powerbi_authenticated");
-        setUser(null);
-      }
-    } catch {
-      // If backend unreachable, check sessionStorage only
-      if (sessionStorage.getItem("powerbi_authenticated") === "true") {
-        setUser(STATIC_USER);
-      } else {
-        setUser(null);
-      }
-    }
-    setIsLoading(false);
+  const markAuthenticated = () => {
+    sessionStorage.setItem("powerbi_authenticated", "true");
+    setUser(STATIC_USER);
   };
 
   useEffect(() => {
-    checkAuth();
+    if (sessionStorage.getItem("powerbi_authenticated") === "true") {
+      setUser(STATIC_USER);
+    }
+    setIsLoading(false);
   }, []);
+
+  const BACKEND_BASE_URL = "https://powerbi-azure-auth-app-e6dtdsb2ccawg9cy.eastus-01.azurewebsites.net";
 
   const logout = async () => {
     try {
@@ -78,7 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         isAuthenticated: !!user,
         isLoading,
-        checkAuth,
+        markAuthenticated,
         logout,
       }}
     >
