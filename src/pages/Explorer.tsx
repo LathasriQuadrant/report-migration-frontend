@@ -176,6 +176,10 @@ const Explorer = () => {
       const downloadWorkbookData = await downloadWorkbookResponse.json();
       console.log("Workbook downloaded:", downloadWorkbookData);
 
+      // Use blob_path from download response for extraction
+      const blobPath = downloadWorkbookData.blob_path || downloadWorkbookData.file_name || `${selectedWorkbook.name}.twbx`;
+      console.log("Using blob_path for extraction:", blobPath);
+
       // Step 2: Download workbook datasources
       const downloadDatasourcesResponse = await fetch(
         "https://tableau-backend-app-hrdxfhfpghf3f0bg.eastus-01.azurewebsites.net/tableau/download_workbook_datasources",
@@ -203,7 +207,7 @@ const Explorer = () => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            blob_path: `${selectedWorkbook.name}.twbx`,
+            blob_path: blobPath,
           }),
         }
       );
@@ -296,6 +300,10 @@ const Explorer = () => {
       const downloadWorkbookData = await downloadWorkbookResponse.json();
       console.log("Workbook downloaded:", downloadWorkbookData);
 
+      // Use blob_path from download response for extraction
+      const blobPath = downloadWorkbookData.blob_path || downloadWorkbookData.file_name || `${selectedNode.name}.twbx`;
+      console.log("Using blob_path for extraction:", blobPath);
+
       // Step 2: Download workbook datasources
       const downloadDatasourcesResponse = await fetch(
         "https://tableau-backend-app-hrdxfhfpghf3f0bg.eastus-01.azurewebsites.net/tableau/download_workbook_datasources",
@@ -323,7 +331,7 @@ const Explorer = () => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            blob_path: `${selectedNode.name}.twbx`,
+            blob_path: blobPath,
           }),
         }
       );
