@@ -20,20 +20,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Check Azure AD authentication status by calling the backend
   const checkAuth = async (): Promise<boolean> => {
     try {
-      const response = await fetch(`${BACKEND_BASE_URL}/auth/me`, {
+      const response = await fetch(`${BACKEND_BASE_URL}/workspaces`, {
         credentials: "include",
       });
 
       if (response.ok) {
-        const data = await response.json();
+        const storedName = sessionStorage.getItem("azure_user_name");
+        const storedEmail = sessionStorage.getItem("azure_user_email");
+
         setUser({
-          id: data.oid || "1",
-          name: data.name || "User",
-          email: data.email || "",
+          id: sessionStorage.getItem("azure_user_oid") || "1",
+          name: storedName || "User",
+          email: storedEmail || "",
         });
         sessionStorage.setItem("powerbi_authenticated", "true");
-        sessionStorage.setItem("azure_user_name", data.name || "");
-        sessionStorage.setItem("azure_user_email", data.email || "");
         return true;
       }
     } catch (error) {
