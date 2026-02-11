@@ -208,7 +208,7 @@ const Explorer = () => {
 
       // Step 3: Extract data
       const extractDataResponse = await fetch(
-        "https://dataset-extraction-b0erfxbtereygmgz.eastus-01.azurewebsites.net/extract-data",
+        "https://dataset-extraction2-gbdnhcd0dxeaf6df.eastus-01.azurewebsites.net/extract-data",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -338,7 +338,7 @@ const Explorer = () => {
 
       // Step 3: Extract data
       const extractDataResponse = await fetch(
-        "https://dataset-extraction-b0erfxbtereygmgz.eastus-01.azurewebsites.net/extract-data",
+        "https://dataset-extraction2-gbdnhcd0dxeaf6df.eastus-01.azurewebsites.net/extract-data",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
