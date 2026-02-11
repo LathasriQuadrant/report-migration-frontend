@@ -8,12 +8,10 @@ import { useEffect } from "react";
 const PowerBIAuthSuccess = () => {
   useEffect(() => {
     // Signal the main tab that login is complete
-    localStorage.setItem("pbi_login_sync", Date.now().toString());
+    localStorage.setItem("pbi_auth_success", Date.now().toString());
 
-    // Close the popup after a brief moment
-    setTimeout(() => {
-      window.close();
-    }, 300);
+    // Close the popup immediately
+    window.close();
   }, []);
 
   return (
