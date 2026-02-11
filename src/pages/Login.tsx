@@ -20,8 +20,27 @@ const Login = () => {
     }
   }, [isAuthenticated, navigate]);
 
-  // Check if auth completed
+  // Check if auth completed via backend or localStorage (cross-tab)
   const checkAuthCompletion = useCallback(async () => {
+    // First check localStorage (set by PowerBIAuthSuccess in the popup)
+    const localAuth = localStorage.getItem("powerbi_authenticated");
+    if (localAuth === "true") {
+      const userDetails = localStorage.getItem("user_details");
+      if (userDetails) {
+        const { name, email } = JSON.parse(userDetails);
+        sessionStorage.setItem("powerbi_authenticated", "true");
+        sessionStorage.setItem("azure_user_name", name || "User");
+        sessionStorage.setItem("azure_user_email", email || "");
+      }
+      // Clean up localStorage flags
+      localStorage.removeItem("powerbi_authenticated");
+      localStorage.removeItem("user_details");
+      await checkAuth();
+      navigate("/dashboard", { replace: true });
+      return true;
+    }
+
+    // Fallback: try backend session check
     const isAuthed = await checkAuth();
     if (isAuthed) {
       navigate("/dashboard", { replace: true });
@@ -29,6 +48,17 @@ const Login = () => {
     }
     return false;
   }, [checkAuth, navigate]);
+
+  // Listen for storage events from the popup tab
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "powerbi_authenticated" && e.newValue === "true") {
+        checkAuthCompletion();
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, [checkAuthCompletion]);
 
   // Poll for authentication completion when waiting
   useEffect(() => {
@@ -50,7 +80,7 @@ const Login = () => {
         loginWindow?.close();
         clearInterval(interval);
       }
-    }, 1500);
+    }, 2000);
 
     return () => clearInterval(interval);
   }, [isWaiting, loginWindow, checkAuthCompletion]);
