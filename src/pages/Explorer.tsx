@@ -196,40 +196,24 @@ const Explorer = () => {
       const downloadDatasourcesData = await downloadDatasourcesResponse.json();
       console.log("Datasources downloaded:", downloadDatasourcesData);
 
-      // Step 3: Extract data for each datasource
-      const datasourceFiles: any[] = downloadDatasourcesData.datasources || downloadDatasourcesData.files || [selectedWorkbook.name];
-      const allExtractResults: any[] = [];
-
-      for (const dsFile of datasourceFiles) {
-        const blobPath = typeof dsFile === 'string' ? dsFile : dsFile.name || dsFile.file_name;
-        const extractPath = blobPath.endsWith('.twbx') ? blobPath : `${blobPath}.twbx`;
-
-        console.log(`Extracting data for: ${extractPath}`);
-        const extractDataResponse = await fetch(
-          "https://dataset-extraction-b0erfxbtereygmgz.eastus-01.azurewebsites.net/extract-data",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ blob_path: extractPath }),
-          }
-        );
-
-        if (!extractDataResponse.ok) {
-          console.error(`Failed to extract data for: ${extractPath}`);
-          throw new Error(`Failed to extract data for: ${extractPath}`);
+      // Step 3: Extract data
+      const extractDataResponse = await fetch(
+        "https://dataset-extraction-b0erfxbtereygmgz.eastus-01.azurewebsites.net/extract-data",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            blob_path: `${selectedWorkbook.name}.twbx`,
+          }),
         }
+      );
 
-        const extractDataResult = await extractDataResponse.json();
-        allExtractResults.push(extractDataResult);
-        console.log(`Extract result for ${extractPath}:`, extractDataResult);
-        console.log("Folder:", extractDataResult.folder || extractDataResult.output_folder);
-        console.log("Uploaded files:", extractDataResult.files || extractDataResult.uploaded_files || extractDataResult.output_files);
+      if (!extractDataResponse.ok) {
+        throw new Error("Failed to extract data");
       }
 
-      console.log("All extraction results:", allExtractResults);
-
-      // Store extraction results in session storage
-      sessionStorage.setItem("extraction_results", JSON.stringify(allExtractResults));
+      const extractDataResult = await extractDataResponse.json();
+      console.log("Data extracted:", extractDataResult);
 
       // Store workbook data in session storage
       const workbookData = {
@@ -319,40 +303,24 @@ const Explorer = () => {
       const downloadDatasourcesData = await downloadDatasourcesResponse.json();
       console.log("Datasources downloaded:", downloadDatasourcesData);
 
-      // Step 3: Extract data for each datasource
-      const datasourceFiles: any[] = downloadDatasourcesData.datasources || downloadDatasourcesData.files || [selectedNode.name];
-      const allExtractResults: any[] = [];
-
-      for (const dsFile of datasourceFiles) {
-        const blobPath = typeof dsFile === 'string' ? dsFile : dsFile.name || dsFile.file_name;
-        const extractPath = blobPath.endsWith('.twbx') ? blobPath : `${blobPath}.twbx`;
-
-        console.log(`Extracting data for: ${extractPath}`);
-        const extractDataResponse = await fetch(
-          "https://dataset-extraction-b0erfxbtereygmgz.eastus-01.azurewebsites.net/extract-data",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ blob_path: extractPath }),
-          }
-        );
-
-        if (!extractDataResponse.ok) {
-          console.error(`Failed to extract data for: ${extractPath}`);
-          throw new Error(`Failed to extract data for: ${extractPath}`);
+      // Step 3: Extract data
+      const extractDataResponse = await fetch(
+        "https://dataset-extraction-b0erfxbtereygmgz.eastus-01.azurewebsites.net/extract-data",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            blob_path: `${selectedNode.name}.twbx`,
+          }),
         }
+      );
 
-        const extractDataResult = await extractDataResponse.json();
-        allExtractResults.push(extractDataResult);
-        console.log(`Extract result for ${extractPath}:`, extractDataResult);
-        console.log("Folder:", extractDataResult.folder || extractDataResult.output_folder);
-        console.log("Uploaded files:", extractDataResult.files || extractDataResult.uploaded_files || extractDataResult.output_files);
+      if (!extractDataResponse.ok) {
+        throw new Error("Failed to extract data");
       }
 
-      console.log("All extraction results:", allExtractResults);
-
-      // Store extraction results in session storage
-      sessionStorage.setItem("extraction_results", JSON.stringify(allExtractResults));
+      const extractDataResult = await extractDataResponse.json();
+      console.log("Data extracted:", extractDataResult);
 
     // Store selected node data in session storage
     const nodeData = {
