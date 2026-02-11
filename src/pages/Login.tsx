@@ -9,7 +9,7 @@ const LOGIN_URL = `${BACKEND_BASE_URL}/login`;
 
 const Login = () => {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, setUserFromCallback } = useAuth();
   const [isWaiting, setIsWaiting] = useState(false);
 
   // Redirect if already authenticated
@@ -26,6 +26,13 @@ const Login = () => {
     // Listen for localStorage changes from the auth success tab
     const handleStorage = (e: StorageEvent) => {
       if (e.key === "user_details" && e.newValue) {
+        try {
+          const userData = JSON.parse(e.newValue);
+          setUserFromCallback(userData);
+        } catch {
+          // If parsing fails, still mark as authenticated
+          sessionStorage.setItem("powerbi_authenticated", "true");
+        }
         navigate("/dashboard", { replace: true });
       }
     };
