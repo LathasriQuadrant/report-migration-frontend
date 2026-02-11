@@ -1,44 +1,35 @@
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
 /**
- * Handles redirect from /auth/callback which includes user details as query params.
+ * This page handles the callback from Azure AD authentication.
+ * Automatically redirects to dashboard after successful auth.
  */
 const PowerBIAuthSuccess = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const { checkAuth } = useAuth();
   const [isVerifying, setIsVerifying] = useState(true);
 
   useEffect(() => {
     const verifyAndRedirect = async () => {
-      // Extract user details from /auth/callback redirect URL
-      const name = searchParams.get("name");
-      const email = searchParams.get("email");
-      const tid = searchParams.get("tid") || searchParams.get("tenant");
-      const oid = searchParams.get("oid");
-
-      // Store in sessionStorage
-      if (name) sessionStorage.setItem("azure_user_name", name);
-      if (email) sessionStorage.setItem("azure_user_email", email);
-      if (tid) sessionStorage.setItem("azure_user_tid", tid);
-      if (oid) sessionStorage.setItem("azure_user_oid", oid);
+      // Mark as authenticated in session storage
       sessionStorage.setItem("powerbi_authenticated", "true");
-
-      // Signal other tabs
-      localStorage.setItem("user_details", JSON.stringify({ name, email, tid, oid }));
-
-      // Verify session via /workspaces
+      
+      // Verify auth with backend and update context
       await checkAuth();
-
+      
       setIsVerifying(false);
-      setTimeout(() => navigate('/dashboard', { replace: true }), 1500);
+      
+      // Redirect to dashboard after short delay
+      setTimeout(() => {
+        navigate('/dashboard', { replace: true });
+      }, 1500);
     };
-
+    
     verifyAndRedirect();
-  }, [checkAuth, navigate, searchParams]);
+  }, [checkAuth, navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
@@ -54,7 +45,7 @@ const PowerBIAuthSuccess = () => {
           {isVerifying ? "Verifying..." : "Authentication Successful"}
         </h2>
         <p className="text-muted-foreground">
-          {isVerifying
+          {isVerifying 
             ? "Please wait while we verify your credentials..."
             : "Redirecting to dashboard..."}
         </p>

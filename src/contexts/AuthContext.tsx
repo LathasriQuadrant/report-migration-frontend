@@ -17,7 +17,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Check Azure AD authentication status by calling /workspaces
+  // Check Azure AD authentication status by calling the backend
   const checkAuth = async (): Promise<boolean> => {
     try {
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces`, {
@@ -25,11 +25,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (response.ok) {
+        // User is authenticated via Azure AD
         const storedName = sessionStorage.getItem("azure_user_name");
         const storedEmail = sessionStorage.getItem("azure_user_email");
 
         setUser({
-          id: sessionStorage.getItem("azure_user_oid") || "1",
+          id: "1",
           name: storedName || "User",
           email: storedEmail || "",
         });
@@ -43,16 +44,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return false;
   };
 
-  // Check for local/session-persisted authentication
+  // Check for local (simulated) authentication
   const checkLocalAuth = (): boolean => {
-    const isAuth = sessionStorage.getItem("powerbi_authenticated") === "true" ||
-                   sessionStorage.getItem("local_authenticated") === "true";
-    if (isAuth) {
+    const isLocalAuth = sessionStorage.getItem("local_authenticated") === "true";
+    if (isLocalAuth) {
       const storedName = sessionStorage.getItem("azure_user_name");
       const storedEmail = sessionStorage.getItem("azure_user_email");
 
       setUser({
-        id: sessionStorage.getItem("azure_user_oid") || "1",
+        id: "1",
         name: storedName || "User",
         email: storedEmail || "",
       });
