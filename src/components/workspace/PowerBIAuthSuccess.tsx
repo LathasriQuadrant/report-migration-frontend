@@ -1,40 +1,28 @@
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
 /**
- * This page handles the callback from Azure AD authentication.
- * Extracts user details from URL query params set by /auth/callback,
- * stores them in sessionStorage, then verifies session via /workspaces.
+ * This page handles the redirect from Azure AD /auth/callback.
+ * Calls /auth/me to fetch user details and verify session.
  */
 const PowerBIAuthSuccess = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const { checkAuth } = useAuth();
   const [isVerifying, setIsVerifying] = useState(true);
 
   useEffect(() => {
     const verifyAndRedirect = async () => {
-      // Extract user details from callback URL query params
-      const name = searchParams.get("name");
-      const email = searchParams.get("email");
-      const tid = searchParams.get("tid");
-      const oid = searchParams.get("oid");
+      // Verify session and fetch user details from /auth/me
+      const success = await checkAuth();
 
-      // Store user details in sessionStorage
-      if (name) sessionStorage.setItem("azure_user_name", name);
-      if (email) sessionStorage.setItem("azure_user_email", email);
-      if (tid) sessionStorage.setItem("azure_user_tid", tid);
-      if (oid) sessionStorage.setItem("azure_user_oid", oid);
-
-      sessionStorage.setItem("powerbi_authenticated", "true");
-
-      // Signal other tabs via localStorage
-      localStorage.setItem("user_details", JSON.stringify({ name, email, tid, oid }));
-
-      // Verify session with /workspaces and update auth context
-      await checkAuth();
+      if (success) {
+        // Signal other tabs via localStorage
+        const name = sessionStorage.getItem("azure_user_name");
+        const email = sessionStorage.getItem("azure_user_email");
+        localStorage.setItem("user_details", JSON.stringify({ name, email }));
+      }
 
       setIsVerifying(false);
 
@@ -44,7 +32,7 @@ const PowerBIAuthSuccess = () => {
     };
 
     verifyAndRedirect();
-  }, [checkAuth, navigate, searchParams]);
+  }, [checkAuth, navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
