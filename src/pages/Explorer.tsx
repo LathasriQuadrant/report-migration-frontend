@@ -213,7 +213,11 @@ const Explorer = () => {
       }
 
       const extractDataResult = await extractDataResponse.json();
-      console.log("Data extracted:", extractDataResult);
+      console.log("=== Extract Data Response ===");
+      console.log("Full response:", JSON.stringify(extractDataResult, null, 2));
+      console.log("Output folder:", extractDataResult.folder || extractDataResult.output_folder);
+      console.log("Uploaded files:", extractDataResult.files || extractDataResult.uploaded_files);
+      console.log("=============================");
 
       // Store workbook data in session storage
       const workbookData = {
@@ -320,7 +324,11 @@ const Explorer = () => {
       }
 
       const extractDataResult = await extractDataResponse.json();
-      console.log("Data extracted:", extractDataResult);
+      console.log("=== Extract Data Response ===");
+      console.log("Full response:", JSON.stringify(extractDataResult, null, 2));
+      console.log("Output folder:", extractDataResult.folder || extractDataResult.output_folder);
+      console.log("Uploaded files:", extractDataResult.files || extractDataResult.uploaded_files);
+      console.log("=============================");
 
     // Store selected node data in session storage
     const nodeData = {
