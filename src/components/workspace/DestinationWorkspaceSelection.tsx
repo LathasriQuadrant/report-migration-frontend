@@ -260,6 +260,13 @@ const DestinationWorkspaceSelection = () => {
       // Add service principal to the selected workspace
       await addServicePrincipalToWorkspace(selectedWorkspace.id);
 
+      // Get blob folder URL from extraction step (stored in sessionStorage)
+      const blobFolderUrl = sessionStorage.getItem("extraction_output_folder") || "";
+      const extractionFiles = sessionStorage.getItem("extraction_output_files") || "[]";
+
+      console.log("Blob folder URL:", blobFolderUrl);
+      console.log("Extraction files:", extractionFiles);
+
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces/${selectedWorkspace.id}/auto-upload`, {
         method: "POST",
         credentials: "include",
@@ -268,6 +275,8 @@ const DestinationWorkspaceSelection = () => {
         },
         body: JSON.stringify({
           report_name: nodeInfo.name,
+          blob_folder_url: blobFolderUrl,
+          files: JSON.parse(extractionFiles),
         }),
       });
 
@@ -294,8 +303,7 @@ const DestinationWorkspaceSelection = () => {
           node: nodeInfo,
           source: sourceId,
           workspace: selectedWorkspace,
-          // reportId: migrateResult.reportId, // optional but useful
-          // datasetId: migrateResult.datasetId, // optional
+          blobFolderUrl,
         },
       });
     } catch (err) {
