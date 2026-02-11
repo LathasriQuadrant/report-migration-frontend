@@ -1,23 +1,34 @@
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
 /**
  * This page handles the callback from Azure AD authentication.
- * Automatically redirects to dashboard after successful auth.
+ * Extracts user profile from query params and redirects to dashboard.
  */
 const PowerBIAuthSuccess = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { checkAuth } = useAuth();
   const [isVerifying, setIsVerifying] = useState(true);
 
   useEffect(() => {
     const verifyAndRedirect = async () => {
-      // Mark as authenticated in session storage
+      // Extract user profile from query parameters
+      const name = searchParams.get("name") || "User";
+      const email = searchParams.get("email") || "";
+
+      // Save user details to sessionStorage and localStorage
       sessionStorage.setItem("powerbi_authenticated", "true");
-      
-      // Verify auth with backend and update context
+      sessionStorage.setItem("azure_user_name", name);
+      sessionStorage.setItem("azure_user_email", email);
+
+      // Also save to localStorage to notify other tabs (Login polling)
+      localStorage.setItem("powerbi_authenticated", "true");
+      localStorage.setItem("user_details", JSON.stringify({ name, email }));
+
+      // Try to verify with backend, but don't block on failure
       await checkAuth();
       
       setIsVerifying(false);
@@ -29,7 +40,7 @@ const PowerBIAuthSuccess = () => {
     };
     
     verifyAndRedirect();
-  }, [checkAuth, navigate]);
+  }, [checkAuth, navigate, searchParams]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
