@@ -17,15 +17,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Fetch user profile from backend session
+  const fetchUserProfile = async (): Promise<User | null> => {
+    try {
+      const response = await fetch(`${BACKEND_BASE_URL}/auth/me`, {
+        credentials: "include",
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.name) {
+          return {
+            id: data.id || "1",
+            name: data.name,
+            email: data.email || "",
+            designation: data.designation || "",
+            tenant_id: data.tenant_id || "",
+            office_location: data.office_location || "",
+          };
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch user profile:", error);
+    }
+    return null;
+  };
+
   // Check Azure AD authentication status by calling the backend
   const checkAuth = async (): Promise<boolean> => {
     try {
+      // Try fetching user profile first
+      const profile = await fetchUserProfile();
+      if (profile) {
+        setUser(profile);
+        sessionStorage.setItem("powerbi_authenticated", "true");
+        sessionStorage.setItem("azure_user_name", profile.name);
+        sessionStorage.setItem("azure_user_email", profile.email);
+        return true;
+      }
+
+      // Fallback: check /workspaces to verify session is valid
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces`, {
         credentials: "include",
       });
 
       if (response.ok) {
-        // User is authenticated via Azure AD
         const storedName = sessionStorage.getItem("azure_user_name");
         const storedEmail = sessionStorage.getItem("azure_user_email");
 
@@ -66,13 +101,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const initAuth = async () => {
       setIsLoading(true);
 
-      // First check local auth (faster, no network call)
       if (checkLocalAuth()) {
         setIsLoading(false);
         return;
       }
 
-      // Then check Azure AD auth
       await checkAuth();
       setIsLoading(false);
     };

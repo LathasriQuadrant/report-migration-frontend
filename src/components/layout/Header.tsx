@@ -52,10 +52,16 @@ const Header = () => {
               </span>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <div className="px-2 py-1.5">
+          <DropdownMenuContent align="end" className="w-64">
+            <div className="px-3 py-2">
               <p className="text-sm font-medium">{user?.name}</p>
               <p className="text-xs text-muted-foreground">{user?.email}</p>
+              {user?.designation && (
+                <p className="text-xs text-muted-foreground mt-0.5">{user.designation}</p>
+              )}
+              {user?.office_location && (
+                <p className="text-xs text-muted-foreground">{user.office_location}</p>
+              )}
             </div>
             <DropdownMenuSeparator />
             <DropdownMenuItem>
