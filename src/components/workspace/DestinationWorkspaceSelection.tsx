@@ -257,10 +257,8 @@ const DestinationWorkspaceSelection = () => {
 
     setIsUploading(true);
     try {
-      // First, add service principal to the workspace (for Tableau migrations)
-      if (sourceId === "tableau") {
-        await addServicePrincipalToWorkspace(selectedWorkspace.id);
-      }
+      // Add service principal to the selected workspace
+      await addServicePrincipalToWorkspace(selectedWorkspace.id);
 
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces/${selectedWorkspace.id}/auto-upload`, {
         method: "POST",
