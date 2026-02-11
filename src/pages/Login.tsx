@@ -19,20 +19,19 @@ const Login = () => {
     }
   }, [isAuthenticated, navigate]);
 
-  // Listen for auth success from the new tab via BroadcastChannel
+  // Poll sessionStorage for auth flag set by the callback tab
   useEffect(() => {
     if (!isWaiting) return;
 
-    const channel = new BroadcastChannel("auth_channel");
-    channel.onmessage = (event) => {
-      if (event.data === "auth_success") {
+    const interval = setInterval(() => {
+      if (sessionStorage.getItem("powerbi_authenticated") === "true") {
         markAuthenticated();
-        navigate("/dashboard", { replace: true });
+        clearInterval(interval);
       }
-    };
+    }, 1000);
 
-    return () => channel.close();
-  }, [isWaiting, markAuthenticated, navigate]);
+    return () => clearInterval(interval);
+  }, [isWaiting, markAuthenticated]);
 
   const handleAzureSignIn = () => {
     setIsWaiting(true);
@@ -150,6 +149,7 @@ const Login = () => {
                 </p>
               </div>
 
+              {/* Azure AD waiting state */}
               {isWaiting ? (
                 <div className="text-center space-y-4 py-4">
                   <div className="w-16 h-16 rounded-full bg-primary/10 mx-auto flex items-center justify-center">
@@ -159,18 +159,27 @@ const Login = () => {
                     <p className="text-sm font-medium">Waiting for authentication...</p>
                     <p className="text-xs text-muted-foreground mt-1">Complete sign-in in the opened browser tab</p>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => setIsWaiting(false)}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setIsWaiting(false);
+                    }}
+                  >
                     Cancel
                   </Button>
                 </div>
               ) : (
-                <Button variant="azure" className="w-full h-11" onClick={handleAzureSignIn}>
-                  <svg className="w-5 h-5 mr-2" viewBox="0 0 21 21" fill="none">
-                    <path d="M10 0v10h10V0H10zm0 11v10h10V11H10zM0 0v10h9V0H0zm0 11v10h9V11H0z" fill="currentColor" />
-                  </svg>
-                  Sign in with Microsoft
-                  <ExternalLink className="w-4 h-4 ml-2" />
-                </Button>
+                <>
+                  {/* Azure AD SSO Button */}
+                  <Button variant="azure" className="w-full h-11" onClick={handleAzureSignIn}>
+                    <svg className="w-5 h-5 mr-2" viewBox="0 0 21 21" fill="none">
+                      <path d="M10 0v10h10V0H10zm0 11v10h10V11H10zM0 0v10h9V0H0zm0 11v10h9V11H0z" fill="currentColor" />
+                    </svg>
+                    Sign in with Microsoft
+                    <ExternalLink className="w-4 h-4 ml-2" />
+                  </Button>
+                </>
               )}
             </div>
 

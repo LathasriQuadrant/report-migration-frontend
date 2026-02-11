@@ -2,21 +2,17 @@ import { CheckCircle2, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 /**
- * Callback page after Azure AD auth (opens in the new tab).
- * Broadcasts auth success to the original tab via BroadcastChannel, then closes.
+ * Callback page after Azure AD auth.
+ * The backend already set the session cookie via /auth/callback redirect.
+ * We just mark sessionStorage and let the original tab detect it.
  */
 const PowerBIAuthSuccess = () => {
   const [isDone, setIsDone] = useState(false);
 
   useEffect(() => {
-    // Notify the original login tab
-    const channel = new BroadcastChannel("auth_channel");
-    channel.postMessage("auth_success");
-    channel.close();
-
+    sessionStorage.setItem("powerbi_authenticated", "true");
     setIsDone(true);
 
-    // Close this tab after a short delay
     setTimeout(() => {
       window.close();
     }, 1500);
@@ -36,7 +32,9 @@ const PowerBIAuthSuccess = () => {
           {isDone ? "Authentication Successful" : "Verifying..."}
         </h2>
         <p className="text-muted-foreground">
-          {isDone ? "You can close this tab." : "Please wait..."}
+          {isDone
+            ? "You can close this tab."
+            : "Please wait..."}
         </p>
       </div>
     </div>
