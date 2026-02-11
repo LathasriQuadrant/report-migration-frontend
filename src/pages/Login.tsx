@@ -9,7 +9,7 @@ const LOGIN_URL = `${BACKEND_BASE_URL}/login`;
 
 const Login = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, setUserFromCallback } = useAuth();
+  const { isAuthenticated, markAuthenticated } = useAuth();
   const [isWaiting, setIsWaiting] = useState(false);
 
   // Redirect if already authenticated
@@ -19,29 +19,22 @@ const Login = () => {
     }
   }, [isAuthenticated, navigate]);
 
-  // Poll for authentication completion when waiting
+  // Listen for auth completion from the other tab via localStorage
   useEffect(() => {
     if (!isWaiting) return;
 
-    // Listen for localStorage changes from the auth success tab
     const handleStorage = (e: StorageEvent) => {
-      if (e.key === "user_details" && e.newValue) {
-        try {
-          const userData = JSON.parse(e.newValue);
-          setUserFromCallback(userData);
-        } catch {
-          // If parsing fails, still mark as authenticated
-          sessionStorage.setItem("powerbi_authenticated", "true");
-        }
+      if (e.key === "powerbi_authenticated" && e.newValue === "true") {
+        markAuthenticated();
         navigate("/dashboard", { replace: true });
       }
     };
     window.addEventListener("storage", handleStorage);
 
+    // Also poll as fallback
     const interval = setInterval(() => {
-      // Check if user is now authenticated (set via callback)
-      const isAuthed = sessionStorage.getItem("powerbi_authenticated") === "true";
-      if (isAuthed) {
+      if (localStorage.getItem("powerbi_authenticated") === "true") {
+        markAuthenticated();
         navigate("/dashboard", { replace: true });
         clearInterval(interval);
       }
@@ -51,7 +44,7 @@ const Login = () => {
       window.removeEventListener("storage", handleStorage);
       clearInterval(interval);
     };
-  }, [isWaiting, navigate]);
+  }, [isWaiting, navigate, markAuthenticated]);
 
   const handleAzureSignIn = () => {
     setIsWaiting(true);
