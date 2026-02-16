@@ -39,6 +39,12 @@ export default function Migration() {
 
   const log = (msg: string) => console.log(`[Migration] ${msg}`);
 
+  const [migrationMode, setMigrationMode] = useState<"import" | "live">("import");
+  const [dbPassword, setDbPassword] = useState<string>("");
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [extractedData, setExtractedData] = useState<any>(null);
+  const [canRefresh, setCanRefresh] = useState(false);
+
   const updateStep = (index: number, status: MigrationStatus, desc?: string) => {
     setSteps((prev) => prev.map((s, i) => (i === index ? { ...s, status, description: desc ?? s.description } : s)));
   };
