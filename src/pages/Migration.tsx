@@ -6,7 +6,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { MigrationStep, MigrationStatus } from "@/types/migration";
 import { cn } from "@/lib/utils";
 
-/* ================z============================================
+/* ============================================================
    Steps (UI remains unchanged)
 ============================================================ */
 const initialSteps: MigrationStep[] = [
@@ -39,98 +39,16 @@ export default function Migration() {
 
   const log = (msg: string) => console.log(`[Migration] ${msg}`);
 
-  const [migrationMode, setMigrationMode] = useState<"import" | "live">("import");
-  const [dbPassword, setDbPassword] = useState<string>("");
-  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
-  const [extractedData, setExtractedData] = useState<any>(null);
-  const [canRefresh, setCanRefresh] = useState(false);
-
   const updateStep = (index: number, status: MigrationStatus, desc?: string) => {
     setSteps((prev) => prev.map((s, i) => (i === index ? { ...s, status, description: desc ?? s.description } : s)));
   };
 
-  const handleRefresh = async () => {
-    try {
-      log("Starting dataset refresh...");
-
-      const file_name = `${reportName}.twbx`;
-      const dataset_id = sessionStorage.getItem("generated_dataset_id");
-      const target_workspace_id = sessionStorage.getItem("workspace_id");
-      const report_id = sessionStorage.getItem("generated_report_id");
-
-      if (!dataset_id || !target_workspace_id) {
-        throw new Error("Missing dataset or workspace ID");
-      }
-
-      const res = await fetch("https://live-data-hqfeeufjawfecjfd.eastus-01.azurewebsites.net/api/v1/refresh", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          accept: "application/json",
-        },
-        body: JSON.stringify({
-          file_name,
-          password: dbPassword,
-          dataset_id,
-          target_workspace_id,
-          report_id, // Optional for auto-rebind
-          container_name: "tabluea-raw",
-        }),
-      });
-
-      if (!res.ok) throw new Error(await res.text());
-
-      const data = await res.json();
-
-      // Update session with new dataset ID if recreated
-      if (data.new_dataset_id) {
-        sessionStorage.setItem("generated_dataset_id", data.new_dataset_id);
-      }
-
-      alert(
-        `✅ Refresh successful!\n${data.summary.total_new_tables} new tables added\n${data.summary.total_refreshed} tables refreshed`,
-      );
-      log("Dataset refresh completed");
-    } catch (e: any) {
-      log(`❌ Refresh ERROR: ${e.message}`);
-      alert(`Refresh failed: ${e.message}`);
-    }
-  };
-
-  const runExtract = async () => {
-    updateStep(0, "running", "Extracting datasource details");
-    log("Extracting datasource from workbook");
-
-    const file_name = `${reportName}.twbx`; // or .twb based on your file
-
-    const res = await fetch("https://live-data-hqfeeufjawfecjfd.eastus-01.azurewebsites.net/api/v1/extract", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        accept: "application/json",
-      },
-      body: JSON.stringify({ file_name }),
-    });
-
-    if (!res.ok) throw new Error(await res.text());
-
-    const data = await res.json();
-    setExtractedData(data);
-
-    // Store for later use
-    sessionStorage.setItem("extracted_datasource", JSON.stringify(data));
-
-    updateStep(0, "completed", `${data.datasource_type} connection detected`);
-    log("Extract completed");
-
-    return data;
-  };
   /* ============================================================
       STEP 1 – New Metadata Extraction (Relationships)
   ============================================================ */
   const runMetadataExtraction = async () => {
     updateStep(0, "running", "Extracting metadata and relationships");
-    log("STEP 1 started (Import Mode)");
+    log("STEP 1 started");
 
     const folder_name = reportName || "relationdatabase";
     const url = `https://relationship-e4hraba6bxg3h6bc.eastus-01.azurewebsites.net/extract-metadata?folder_name=${encodeURIComponent(folder_name)}`;
@@ -140,22 +58,11 @@ export default function Migration() {
       headers: { accept: "application/json" },
     });
 
-    if (!res.ok) {
-      const errorText = await res.text();
-      // Detect "No CSV tables found" error
-      if (
-        errorText.includes("No CSV tables found") ||
-        errorText.includes("no tables found") ||
-        errorText.toLowerCase().includes("not found")
-      ) {
-        log("⚠️ Import mode unavailable. Switching to Live Data mode...");
-        throw new Error("SWITCH_TO_LIVE_MODE");
-      }
-      throw new Error(errorText);
-    }
+    if (!res.ok) throw new Error(await res.text());
 
     const data = await res.json();
 
+    // Store outputs for the next step and the Preview page
     sessionStorage.setItem("metadataOutputBlobUrl", data.outputBlobUrl);
     if (data.metadata?.relationships) {
       sessionStorage.setItem("migration_relationships", JSON.stringify(data.metadata.relationships));
@@ -168,69 +75,6 @@ export default function Migration() {
   /* ============================================================
       STEP 3 – New Semantic Model & Report Creation
   ============================================================ */
-
-  const runLiveDataMigration = async () => {
-    updateStep(2, "running", "Migrating to Power BI (Live Data Mode)");
-    log("Live Data Migration started");
-
-    const file_name = `${reportName}.twbx`;
-    const target_workspace_id = sessionStorage.getItem("workspace_id");
-
-    if (!target_workspace_id) throw new Error("Target Workspace ID missing");
-    if (!dbPassword) throw new Error("Database password missing");
-
-    const res = await fetch("https://live-data-hqfeeufjawfecjfd.eastus-01.azurewebsites.net/api/v1/migrate", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        accept: "application/json",
-      },
-      body: JSON.stringify({
-        file_name,
-        password: dbPassword,
-        target_workspace_id,
-      }),
-    });
-
-    if (!res.ok) throw new Error(await res.text());
-
-    const data = await res.json();
-
-    // Store IDs for preview and refresh
-    sessionStorage.setItem("generated_dataset_id", data.dataset_id);
-    sessionStorage.setItem("generated_report_id", data.report_id);
-    sessionStorage.setItem("report_name", data.report_name);
-    sessionStorage.setItem("workbook_name", data.workbook_name);
-
-    updateStep(2, "completed", `${data.table_count} tables with ${data.relationships_count} relationships migrated`);
-    log("Live Data Migration completed");
-
-    setCanRefresh(true); // Enable refresh button
-  };
-  const continueWithLiveMode = async () => {
-    try {
-      setShowPasswordDialog(false);
-
-      // Skip Step 1 (already completed by extract)
-      // Step 2: Artifact Generation (skip for live mode)
-      updateStep(1, "completed", "Live data mode - artifacts not needed");
-
-      // Step 3: Live Data Migration
-      await runLiveDataMigration();
-
-      // Final Steps
-      updateStep(3, "completed", "Deployed to Power BI Workspace");
-      updateStep(4, "completed", "Validation Successful");
-
-      log("Live Data Migration flow completed");
-      setIsComplete(true);
-    } catch (e: any) {
-      log(`❌ ERROR: ${e.message}`);
-      setFatalError(e.message);
-      setSteps((prev) => prev.map((s) => (s.status === "running" ? { ...s, status: "failed" } : s)));
-    }
-  };
-
   const runDatasetAndReportGeneration = async () => {
     updateStep(2, "running", "Creating Semantic Model & Relationships");
     log("STEP 3 started");
@@ -275,48 +119,35 @@ export default function Migration() {
   /* ============================================================
       Migration Orchestrator
   ============================================================ */
-
   useEffect(() => {
     const run = async () => {
       try {
         if (!reportName || !nodeInfo) return;
 
-        // Try Import Mode first
-        try {
-          await runMetadataExtraction();
-          setMigrationMode("import");
+        // Step 1: Extract Metadata
+        await runMetadataExtraction();
 
-          // Continue with import mode flow
-          updateStep(1, "completed", "Artifacts generated successfully");
-          await runDatasetAndReportGeneration();
-          updateStep(3, "completed", "Deployed to Power BI Workspace");
-          updateStep(4, "completed", "Validation Successful");
+        // Step 2: Artifact Generation (Placeholder logic)
+        updateStep(1, "completed", "Artifacts generated successfully");
 
-          log("Migration flow completed");
-          setIsComplete(true);
-        } catch (error: any) {
-          // If import mode fails, switch to live data mode
-          if (error.message === "SWITCH_TO_LIVE_MODE") {
-            setMigrationMode("live");
+        // Step 3: Create PBI Report & Dataset
+        await runDatasetAndReportGeneration();
 
-            // Extract datasource details
-            await runExtract();
+        // Final Steps
+        updateStep(3, "completed", "Deployed to Power BI Workspace");
+        updateStep(4, "completed", "Validation Successful");
 
-            // Show password dialog and wait for user input
-            setShowPasswordDialog(true);
-            return; // Stop here, will continue after password is submitted
-          }
-          throw error; // Re-throw other errors
-        }
+        log("Migration flow completed");
+        setIsComplete(true);
       } catch (e: any) {
         log(`❌ ERROR: ${e.message}`);
         setFatalError(e.message);
+        // Mark current step as failed
         setSteps((prev) => prev.map((s) => (s.status === "running" ? { ...s, status: "failed" } : s)));
       }
     };
 
     run();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reportName, nodeInfo]);
 
   return (
@@ -354,52 +185,7 @@ export default function Migration() {
           ))}
         </div>
 
-        {showPasswordDialog && extractedData && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 space-y-4">
-              <h2 className="text-xl font-bold">Database Password Required</h2>
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">
-                  Datasource Type: <strong>{extractedData.datasource_type}</strong>
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Database: <strong>{extractedData.connection?.database || extractedData.connection?.catalog}</strong>
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Username: <strong>{extractedData.connection?.username}</strong>
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Enter {extractedData.datasource_type === "databricks" ? "Access Token" : "Password"}
-                </label>
-                <input
-                  type="password"
-                  value={dbPassword}
-                  onChange={(e) => setDbPassword(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-md"
-                  placeholder={extractedData.datasource_type === "databricks" ? "Enter access token" : "Enter password"}
-                />
-              </div>
-              <div className="flex gap-2 justify-end">
-                <Button variant="outline" onClick={() => navigate("/")}>
-                  Cancel
-                </Button>
-                <Button onClick={continueWithLiveMode} disabled={!dbPassword}>
-                  Continue Migration
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="flex gap-3 justify-end pt-4">
-          {canRefresh && migrationMode === "live" && (
-            <Button onClick={handleRefresh} variant="outline" className="gap-2" size="lg">
-              <Loader2 className="w-4 h-4" />
-              Refresh Dataset
-            </Button>
-          )}
+        <div className="flex justify-end pt-4">
           <Button
             onClick={() => navigate("/preview")}
             disabled={!isComplete}
