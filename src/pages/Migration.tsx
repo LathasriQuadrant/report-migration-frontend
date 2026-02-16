@@ -48,7 +48,7 @@ export default function Migration() {
   ============================================================ */
   const runMetadataExtraction = async () => {
     updateStep(0, "running", "Extracting metadata and relationships");
-    log("STEP 1 started");
+    log("STEP 1 started (Import Mode)");
 
     const folder_name = reportName || "relationdatabase";
     const url = `https://relationship-e4hraba6bxg3h6bc.eastus-01.azurewebsites.net/extract-metadata?folder_name=${encodeURIComponent(folder_name)}`;
@@ -58,11 +58,18 @@ export default function Migration() {
       headers: { accept: "application/json" },
     });
 
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) {
+      const errorText = await res.text();
+      // Detect "No CSV tables found" error
+      if (errorText.includes("No CSV tables found")) {
+        log("⚠️ Import mode unavailable. Switching to Live Data mode...");
+        throw new Error("SWITCH_TO_LIVE_MODE");
+      }
+      throw new Error(errorText);
+    }
 
     const data = await res.json();
 
-    // Store outputs for the next step and the Preview page
     sessionStorage.setItem("metadataOutputBlobUrl", data.outputBlobUrl);
     if (data.metadata?.relationships) {
       sessionStorage.setItem("migration_relationships", JSON.stringify(data.metadata.relationships));
@@ -75,6 +82,46 @@ export default function Migration() {
   /* ============================================================
       STEP 3 – New Semantic Model & Report Creation
   ============================================================ */
+
+  const runLiveDataMigration = async () => {
+    updateStep(2, "running", "Migrating to Power BI (Live Data Mode)");
+    log("Live Data Migration started");
+
+    const file_name = `${reportName}.twbx`;
+    const target_workspace_id = sessionStorage.getItem("workspace_id");
+
+    if (!target_workspace_id) throw new Error("Target Workspace ID missing");
+    if (!dbPassword) throw new Error("Database password missing");
+
+    const res = await fetch("https://live-data-hqfeeufjawfecjfd.eastus-01.azurewebsites.net/api/v1/migrate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify({
+        file_name,
+        password: dbPassword,
+        target_workspace_id,
+      }),
+    });
+
+    if (!res.ok) throw new Error(await res.text());
+
+    const data = await res.json();
+
+    // Store IDs for preview and refresh
+    sessionStorage.setItem("generated_dataset_id", data.dataset_id);
+    sessionStorage.setItem("generated_report_id", data.report_id);
+    sessionStorage.setItem("report_name", data.report_name);
+    sessionStorage.setItem("workbook_name", data.workbook_name);
+
+    updateStep(2, "completed", `${data.table_count} tables with ${data.relationships_count} relationships migrated`);
+    log("Live Data Migration completed");
+
+    setCanRefresh(true); // Enable refresh button
+  };
+
   const runDatasetAndReportGeneration = async () => {
     updateStep(2, "running", "Creating Semantic Model & Relationships");
     log("STEP 3 started");
