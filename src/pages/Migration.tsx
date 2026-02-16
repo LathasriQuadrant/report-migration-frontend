@@ -43,6 +43,54 @@ export default function Migration() {
     setSteps((prev) => prev.map((s, i) => (i === index ? { ...s, status, description: desc ?? s.description } : s)));
   };
 
+  const handleRefresh = async () => {
+    try {
+      log("Starting dataset refresh...");
+
+      const file_name = `${reportName}.twbx`;
+      const dataset_id = sessionStorage.getItem("generated_dataset_id");
+      const target_workspace_id = sessionStorage.getItem("workspace_id");
+      const report_id = sessionStorage.getItem("generated_report_id");
+
+      if (!dataset_id || !target_workspace_id) {
+        throw new Error("Missing dataset or workspace ID");
+      }
+
+      const res = await fetch("https://live-data-hqfeeufjawfecjfd.eastus-01.azurewebsites.net/api/v1/refresh", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          accept: "application/json",
+        },
+        body: JSON.stringify({
+          file_name,
+          password: dbPassword,
+          dataset_id,
+          target_workspace_id,
+          report_id, // Optional for auto-rebind
+          container_name: "tabluea-raw",
+        }),
+      });
+
+      if (!res.ok) throw new Error(await res.text());
+
+      const data = await res.json();
+
+      // Update session with new dataset ID if recreated
+      if (data.new_dataset_id) {
+        sessionStorage.setItem("generated_dataset_id", data.new_dataset_id);
+      }
+
+      alert(
+        `✅ Refresh successful!\n${data.summary.total_new_tables} new tables added\n${data.summary.total_refreshed} tables refreshed`,
+      );
+      log("Dataset refresh completed");
+    } catch (e: any) {
+      log(`❌ Refresh ERROR: ${e.message}`);
+      alert(`Refresh failed: ${e.message}`);
+    }
+  };
+
   /* ============================================================
       STEP 1 – New Metadata Extraction (Relationships)
   ============================================================ */
@@ -351,7 +399,13 @@ export default function Migration() {
           ))}
         </div>
 
-        <div className="flex justify-end pt-4">
+        <div className="flex gap-3 justify-end pt-4">
+          {canRefresh && migrationMode === "live" && (
+            <Button onClick={handleRefresh} variant="outline" className="gap-2" size="lg">
+              <Loader2 className="w-4 h-4" />
+              Refresh Dataset
+            </Button>
+          )}
           <Button
             onClick={() => navigate("/preview")}
             disabled={!isComplete}
