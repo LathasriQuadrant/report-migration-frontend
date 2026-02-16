@@ -256,6 +256,49 @@ export default function Migration() {
             }
             // Show password dialog and wait for user input
             setShowPasswordDialog(true);
+            {
+              showPasswordDialog && extractedData && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                  <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 space-y-4">
+                    <h2 className="text-xl font-bold">Database Password Required</h2>
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">
+                        Datasource Type: <strong>{extractedData.datasource_type}</strong>
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Database:{" "}
+                        <strong>{extractedData.connection?.database || extractedData.connection?.catalog}</strong>
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Username: <strong>{extractedData.connection?.username}</strong>
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Enter {extractedData.datasource_type === "databricks" ? "Access Token" : "Password"}
+                      </label>
+                      <input
+                        type="password"
+                        value={dbPassword}
+                        onChange={(e) => setDbPassword(e.target.value)}
+                        className="w-full px-3 py-2 border rounded-md"
+                        placeholder={
+                          extractedData.datasource_type === "databricks" ? "Enter access token" : "Enter password"
+                        }
+                      />
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                      <Button variant="outline" onClick={() => navigate("/")}>
+                        Cancel
+                      </Button>
+                      <Button onClick={continueWithLiveMode} disabled={!dbPassword}>
+                        Continue Migration
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
             return; // Stop here, will continue after password is submitted
           }
           throw error; // Re-throw other errors
