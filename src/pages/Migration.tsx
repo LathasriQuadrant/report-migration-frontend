@@ -121,6 +121,29 @@ export default function Migration() {
 
     setCanRefresh(true); // Enable refresh button
   };
+  const continueWithLiveMode = async () => {
+    try {
+      setShowPasswordDialog(false);
+
+      // Skip Step 1 (already completed by extract)
+      // Step 2: Artifact Generation (skip for live mode)
+      updateStep(1, "completed", "Live data mode - artifacts not needed");
+
+      // Step 3: Live Data Migration
+      await runLiveDataMigration();
+
+      // Final Steps
+      updateStep(3, "completed", "Deployed to Power BI Workspace");
+      updateStep(4, "completed", "Validation Successful");
+
+      log("Live Data Migration flow completed");
+      setIsComplete(true);
+    } catch (e: any) {
+      log(`❌ ERROR: ${e.message}`);
+      setFatalError(e.message);
+      setSteps((prev) => prev.map((s) => (s.status === "running" ? { ...s, status: "failed" } : s)));
+    }
+  };
 
   const runDatasetAndReportGeneration = async () => {
     updateStep(2, "running", "Creating Semantic Model & Relationships");
