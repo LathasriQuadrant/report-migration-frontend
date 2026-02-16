@@ -97,6 +97,34 @@ export default function Migration() {
     }
   };
 
+  const runExtract = async () => {
+    updateStep(0, "running", "Extracting datasource details");
+    log("Extracting datasource from workbook");
+
+    const file_name = `${reportName}.twbx`; // or .twb based on your file
+
+    const res = await fetch("https://live-data-hqfeeufjawfecjfd.eastus-01.azurewebsites.net/api/v1/extract", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify({ file_name }),
+    });
+
+    if (!res.ok) throw new Error(await res.text());
+
+    const data = await res.json();
+    setExtractedData(data);
+
+    // Store for later use
+    sessionStorage.setItem("extracted_datasource", JSON.stringify(data));
+
+    updateStep(0, "completed", `${data.datasource_type} connection detected`);
+    log("Extract completed");
+
+    return data;
+  };
   /* ============================================================
       STEP 1 – New Metadata Extraction (Relationships)
   ============================================================ */
@@ -243,6 +271,7 @@ export default function Migration() {
   /* ============================================================
       Migration Orchestrator
   ============================================================ */
+
   useEffect(() => {
     const run = async () => {
       try {
@@ -258,6 +287,9 @@ export default function Migration() {
           await runDatasetAndReportGeneration();
           updateStep(3, "completed", "Deployed to Power BI Workspace");
           updateStep(4, "completed", "Validation Successful");
+
+          log("Migration flow completed");
+          setIsComplete(true);
         } catch (error: any) {
           // If import mode fails, switch to live data mode
           if (error.message === "SWITCH_TO_LIVE_MODE") {
@@ -265,49 +297,7 @@ export default function Migration() {
 
             // Extract datasource details
             await runExtract();
-            {
-              showPasswordDialog && extractedData && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                  <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 space-y-4">
-                    <h2 className="text-xl font-bold">Database Password Required</h2>
-                    <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">
-                        Datasource Type: <strong>{extractedData.datasource_type}</strong>
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Database:{" "}
-                        <strong>{extractedData.connection?.database || extractedData.connection?.catalog}</strong>
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Username: <strong>{extractedData.connection?.username}</strong>
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        Enter {extractedData.datasource_type === "databricks" ? "Access Token" : "Password"}
-                      </label>
-                      <input
-                        type="password"
-                        value={dbPassword}
-                        onChange={(e) => setDbPassword(e.target.value)}
-                        className="w-full px-3 py-2 border rounded-md"
-                        placeholder={
-                          extractedData.datasource_type === "databricks" ? "Enter access token" : "Enter password"
-                        }
-                      />
-                    </div>
-                    <div className="flex gap-2 justify-end">
-                      <Button variant="outline" onClick={() => navigate("/")}>
-                        Cancel
-                      </Button>
-                      <Button onClick={continueWithLiveMode} disabled={!dbPassword}>
-                        Continue Migration
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              );
-            }
+
             // Show password dialog and wait for user input
             setShowPasswordDialog(true);
             {
@@ -357,9 +347,6 @@ export default function Migration() {
           }
           throw error; // Re-throw other errors
         }
-
-        log("Migration flow completed");
-        setIsComplete(true);
       } catch (e: any) {
         log(`❌ ERROR: ${e.message}`);
         setFatalError(e.message);
