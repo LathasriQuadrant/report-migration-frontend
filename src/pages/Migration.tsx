@@ -6,7 +6,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { MigrationStep, MigrationStatus } from "@/types/migration";
 import { cn } from "@/lib/utils";
 
-/* ============================================================
+/* ================z============================================
    Steps (UI remains unchanged)
 ============================================================ */
 const initialSteps: MigrationStep[] = [
@@ -143,7 +143,11 @@ export default function Migration() {
     if (!res.ok) {
       const errorText = await res.text();
       // Detect "No CSV tables found" error
-      if (errorText.includes("No CSV tables found")) {
+      if (
+        errorText.includes("No CSV tables found") ||
+        errorText.includes("no tables found") ||
+        errorText.toLowerCase().includes("not found")
+      ) {
         log("⚠️ Import mode unavailable. Switching to Live Data mode...");
         throw new Error("SWITCH_TO_LIVE_MODE");
       }
@@ -300,49 +304,6 @@ export default function Migration() {
 
             // Show password dialog and wait for user input
             setShowPasswordDialog(true);
-            {
-              showPasswordDialog && extractedData && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                  <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 space-y-4">
-                    <h2 className="text-xl font-bold">Database Password Required</h2>
-                    <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">
-                        Datasource Type: <strong>{extractedData.datasource_type}</strong>
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Database:{" "}
-                        <strong>{extractedData.connection?.database || extractedData.connection?.catalog}</strong>
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Username: <strong>{extractedData.connection?.username}</strong>
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        Enter {extractedData.datasource_type === "databricks" ? "Access Token" : "Password"}
-                      </label>
-                      <input
-                        type="password"
-                        value={dbPassword}
-                        onChange={(e) => setDbPassword(e.target.value)}
-                        className="w-full px-3 py-2 border rounded-md"
-                        placeholder={
-                          extractedData.datasource_type === "databricks" ? "Enter access token" : "Enter password"
-                        }
-                      />
-                    </div>
-                    <div className="flex gap-2 justify-end">
-                      <Button variant="outline" onClick={() => navigate("/")}>
-                        Cancel
-                      </Button>
-                      <Button onClick={continueWithLiveMode} disabled={!dbPassword}>
-                        Continue Migration
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              );
-            }
             return; // Stop here, will continue after password is submitted
           }
           throw error; // Re-throw other errors
@@ -355,6 +316,7 @@ export default function Migration() {
     };
 
     run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reportName, nodeInfo]);
 
   return (
@@ -391,6 +353,45 @@ export default function Migration() {
             </div>
           ))}
         </div>
+
+        {showPasswordDialog && extractedData && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 space-y-4">
+              <h2 className="text-xl font-bold">Database Password Required</h2>
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  Datasource Type: <strong>{extractedData.datasource_type}</strong>
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Database: <strong>{extractedData.connection?.database || extractedData.connection?.catalog}</strong>
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Username: <strong>{extractedData.connection?.username}</strong>
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Enter {extractedData.datasource_type === "databricks" ? "Access Token" : "Password"}
+                </label>
+                <input
+                  type="password"
+                  value={dbPassword}
+                  onChange={(e) => setDbPassword(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-md"
+                  placeholder={extractedData.datasource_type === "databricks" ? "Enter access token" : "Enter password"}
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => navigate("/")}>
+                  Cancel
+                </Button>
+                <Button onClick={continueWithLiveMode} disabled={!dbPassword}>
+                  Continue Migration
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="flex gap-3 justify-end pt-4">
           {canRefresh && migrationMode === "live" && (
