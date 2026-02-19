@@ -274,9 +274,7 @@ export default function PowerBIReport() {
 
           if (apiRes.ok) {
             const data = await apiRes.json();
-
             dashboards = data.runtime_visuals?.dashboards || data.dashboards || [];
-
             const mapped = mapApiDataToVisuals(data);
             if (mapped && mapped.length > 0) {
               visualsToCreate = mapped;
@@ -293,10 +291,7 @@ export default function PowerBIReport() {
         return;
       }
 
-      /* =====================================================
-       ⭐ NORMALIZE DASHBOARDS (NO IF/ELSE AFTER THIS)
-       ===================================================== */
-
+      // Normalize Dashboards
       if (!dashboards || dashboards.length === 0) {
         dashboards = [
           {
@@ -331,16 +326,22 @@ export default function PowerBIReport() {
       const uniqueFallbacks = [...new Set(FALLBACK_TABLES)];
 
       /* =====================================================
-       ⭐ SINGLE UNIFIED PAGE CREATION LOOP
-       ===================================================== */
-
+        ⭐ SINGLE UNIFIED PAGE CREATION LOOP
+      ===================================================== */
       for (const dash of dashboards) {
         setStatus(`Creating page: ${dash.dashboardName}`);
 
-        const page = dash === dashboards[0] ? firstPage : await report.addPage(dash.dashboardName);
-
+        // FIX: Power BI pages do not have a .setName() method.
+        // For the first page, we cannot change its internal name,
+        // but we can set its Display Name.
+        let page: any;
         if (dash === dashboards[0]) {
-          await page.setName(dash.dashboardName);
+          page = firstPage;
+          // Note: Renaming the default first page's display name
+          // via SDK can be restricted in some embed scenarios.
+        } else {
+          // When adding a page, the string passed is the DISPLAY NAME.
+          page = await report.addPage(dash.dashboardName);
         }
 
         const dashVisuals = visualsToCreate.filter((v) => dash.worksheets.includes(v.title));
@@ -365,11 +366,13 @@ export default function PowerBIReport() {
             await sleep(200);
 
             for (const [semanticRole, data] of Object.entries(v.bindings)) {
+              // Ensure data and data.column exist before processing
+              if (!data || !data.column) continue;
+
               const sanitizedCol = cleanColumnName(data.column);
               const technicalRole = mapRoleName(v.visualType, semanticRole);
 
               let bound = false;
-
               try {
                 await visual.addDataField(technicalRole, {
                   $schema: "http://powerbi.com/product/schema#column",
