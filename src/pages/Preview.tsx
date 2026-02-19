@@ -260,7 +260,7 @@ export default function PowerBIReport() {
 
     try {
       setStatus("Fetching visual configuration...");
-      let metadata: ExtractionMetadata | null = null;
+      let metadata: any = null;
 
       if (metadataBlobUrl) {
         const apiRes = await fetch(metadataBlobUrl);
