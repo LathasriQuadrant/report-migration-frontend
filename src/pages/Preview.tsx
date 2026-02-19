@@ -118,7 +118,7 @@ export default function PowerBIReport() {
       let visualsToCreate: ApiVisual[] = [];
       let dashboards: ApiDashboard[] = [];
 
-      // Attempt to fetch metadata from Blob (Handle CORS failure gracefully)
+      // Attempt to fetch metadata from Blob
       if (metadataBlobUrl) {
         try {
           const blobRes = await fetch(metadataBlobUrl);
@@ -135,7 +135,7 @@ export default function PowerBIReport() {
         }
       }
 
-      // Fallback to POST API if blob fetch failed
+      // Fallback to POST API if needed
       if (!metadata || dashboards.length === 0) {
         try {
           const apiRes = await fetch(API_URL, {
@@ -208,8 +208,8 @@ export default function PowerBIReport() {
 
             const { visual } = await page.createVisual(pbiType);
 
-            // ⭐ FIXED: Use updateLayout for positioning and sizing
-            await visual.updateLayout({
+            // ⭐ FIXED: Use setVisualLayout for positioning and sizing
+            await visual.setVisualLayout({
               x: 20,
               y: currentY,
               width: 600,
