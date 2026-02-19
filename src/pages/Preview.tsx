@@ -107,6 +107,155 @@ export default function PowerBIReport() {
     return semanticRole;
   };
 
+  // async function createStaticVisuals(report: any) {
+  //   if (executed.current) return;
+  //   executed.current = true;
+  //   console.group("🚀 Creating Visuals from API");
+
+  //   try {
+  //     setStatus("Fetching visual configuration...");
+  //     let visualsToCreate: ApiVisual[] = [];
+
+  //     if (metadataBlobUrl) {
+  //       try {
+  //         const apiRes = await fetch(API_URL, {
+  //           method: "POST",
+  //           headers: { "Content-Type": "application/json" },
+  //           body: JSON.stringify({ metadataBlobPath: metadataBlobUrl }),
+  //         });
+
+  //         if (apiRes.ok) {
+  //           const data = await apiRes.json();
+  //           const mapped = mapApiDataToVisuals(data);
+  //           if (mapped && mapped.length > 0) {
+  //             visualsToCreate = mapped;
+  //             setSource("API");
+  //           }
+  //         }
+  //       } catch (e) {
+  //         /* ignore */
+  //       }
+  //     }
+
+  //     if (visualsToCreate.length === 0) {
+  //       setStatus("No visuals to create (Check API logs)");
+  //       setStatusType("warning");
+  //       console.groupEnd();
+  //       return;
+  //     }
+
+  //     setStatus("Switching to Edit mode...");
+  //     try {
+  //       await report.switchMode(models.ViewMode.Edit);
+  //     } catch (e) {
+  //       /* ignore */
+  //     }
+  //     await sleep(1000);
+
+  //     let page: any;
+  //     try {
+  //       page = await report.getActivePage();
+  //     } catch (e) {
+  //       const pages = await report.getPages();
+  //       page = pages[0];
+  //     }
+
+  //     setStatus("Clearing canvas...");
+  //     try {
+  //       const existingVisuals = await page.getVisuals();
+  //       for (const v of existingVisuals) {
+  //         try {
+  //           await page.deleteVisual(v.name);
+  //         } catch (e) {
+  //           /* ignore */
+  //         }
+  //       }
+  //     } catch (e) {
+  //       /* ignore */
+  //     }
+  //     await sleep(500);
+
+  //     const cleanReportName = rawReportName.replace(/[^a-zA-Z0-9]/g, "");
+  //     const FALLBACK_TABLES = [rawReportName, cleanReportName, "Sheet1", "Table1", "Extract", "Data", "MainTable"];
+  //     const uniqueFallbacks = [...new Set(FALLBACK_TABLES)];
+
+  //     for (const v of visualsToCreate) {
+  //       setStatus(`Creating ${v.visualType}...`);
+  //       try {
+  //         const { visual } = await page.createVisual(v.visualType as string, {
+  //           x: v.layout.x,
+  //           y: v.layout.y,
+  //           width: v.layout.width,
+  //           height: v.layout.height,
+  //           displayState: { mode: models.VisualContainerDisplayMode.Visible },
+  //         });
+
+  //         if (v.title) {
+  //           try {
+  //             await visual.setProperty({ objectName: "title", propertyName: "text" }, { value: v.title });
+  //             await visual.setProperty({ objectName: "title", propertyName: "visible" }, { value: true });
+  //           } catch (e) {
+  //             /* ignore */
+  //           }
+  //         }
+  //         await sleep(200);
+
+  //         const bindingEntries = Object.entries(v.bindings);
+  //         for (const [semanticRole, data] of bindingEntries) {
+  //           const rawCol = data?.column || "";
+  //           const sanitizedCol = cleanColumnName(rawCol);
+  //           const technicalRole = mapRoleName(v.visualType, semanticRole);
+
+  //           if (data && data.table && sanitizedCol) {
+  //             let bound = false;
+  //             try {
+  //               await visual.addDataField(technicalRole, {
+  //                 $schema: "http://powerbi.com/product/schema#column",
+  //                 table: data.table,
+  //                 column: sanitizedCol,
+  //               });
+  //               bound = true;
+  //             } catch (e) {
+  //               /* warn */
+  //             }
+
+  //             if (!bound) {
+  //               for (const fallbackTable of uniqueFallbacks) {
+  //                 if (fallbackTable === data.table) continue;
+  //                 try {
+  //                   await visual.addDataField(technicalRole, {
+  //                     $schema: "http://powerbi.com/product/schema#column",
+  //                     table: fallbackTable,
+  //                     column: sanitizedCol,
+  //                   });
+  //                   bound = true;
+  //                   break;
+  //                 } catch (e) {
+  //                   /* continue */
+  //                 }
+  //               }
+  //             }
+  //           }
+  //         }
+  //       } catch (e: any) {
+  //         console.error(`❌ Create failed:`, e);
+  //       }
+  //     }
+
+  //     await report.save();
+  //     setStatus("Visuals generated successfully!");
+  //     setStatusType("success");
+  //   } catch (err: any) {
+  //     console.error("❌ Critical Error:", err);
+  //     setStatus("Error: " + err.message);
+  //     setStatusType("error");
+  //   } finally {
+  //     console.groupEnd();
+  //   }
+  // }
+
+  // EVERYTHING ABOVE REMAINS SAME UNTIL createStaticVisuals()
+
   async function createStaticVisuals(report: any) {
     if (executed.current) return;
     executed.current = true;
@@ -115,6 +264,9 @@ export default function PowerBIReport() {
     try {
       setStatus("Fetching visual configuration...");
       let visualsToCreate: ApiVisual[] = [];
+
+      // 🟢 NEW: store dashboards
+      let dashboards: any[] = [];
 
       if (metadataBlobUrl) {
         try {
@@ -126,15 +278,17 @@ export default function PowerBIReport() {
 
           if (apiRes.ok) {
             const data = await apiRes.json();
+
+            // 🟢 NEW: extract dashboards safely
+            dashboards = data.runtime_visuals?.dashboards || data.dashboards || [];
+
             const mapped = mapApiDataToVisuals(data);
             if (mapped && mapped.length > 0) {
               visualsToCreate = mapped;
               setSource("API");
             }
           }
-        } catch (e) {
-          /* ignore */
-        }
+        } catch (e) {}
       }
 
       if (visualsToCreate.length === 0) {
@@ -147,9 +301,7 @@ export default function PowerBIReport() {
       setStatus("Switching to Edit mode...");
       try {
         await report.switchMode(models.ViewMode.Edit);
-      } catch (e) {
-        /* ignore */
-      }
+      } catch (e) {}
       await sleep(1000);
 
       let page: any;
@@ -166,79 +318,108 @@ export default function PowerBIReport() {
         for (const v of existingVisuals) {
           try {
             await page.deleteVisual(v.name);
-          } catch (e) {
-            /* ignore */
-          }
+          } catch {}
         }
-      } catch (e) {
-        /* ignore */
-      }
+      } catch {}
       await sleep(500);
 
       const cleanReportName = rawReportName.replace(/[^a-zA-Z0-9]/g, "");
       const FALLBACK_TABLES = [rawReportName, cleanReportName, "Sheet1", "Table1", "Extract", "Data", "MainTable"];
       const uniqueFallbacks = [...new Set(FALLBACK_TABLES)];
 
-      for (const v of visualsToCreate) {
-        setStatus(`Creating ${v.visualType}...`);
-        try {
-          const { visual } = await page.createVisual(v.visualType as string, {
-            x: v.layout.x,
-            y: v.layout.y,
-            width: v.layout.width,
-            height: v.layout.height,
-            displayState: { mode: models.VisualContainerDisplayMode.Visible },
-          });
+      /* ======================================================
+         🟢 NEW: DASHBOARD → PAGE MAPPING LOGIC
+         ====================================================== */
 
-          if (v.title) {
+      if (dashboards && dashboards.length > 0) {
+        setStatus("Creating pages from dashboards...");
+
+        for (const dash of dashboards) {
+          setStatus(`Creating page: ${dash.dashboardName}`);
+
+          // create new page
+          const newPage = await report.addPage(dash.dashboardName);
+
+          // find visuals belonging to this dashboard
+          const dashVisuals = visualsToCreate.filter((v) => dash.worksheets.includes(v.title));
+
+          for (const v of dashVisuals) {
+            setStatus(`Adding ${v.title} to ${dash.dashboardName}`);
+
             try {
-              await visual.setProperty({ objectName: "title", propertyName: "text" }, { value: v.title });
-              await visual.setProperty({ objectName: "title", propertyName: "visible" }, { value: true });
+              const { visual } = await newPage.createVisual(v.visualType as string, {
+                x: v.layout.x,
+                y: v.layout.y,
+                width: v.layout.width,
+                height: v.layout.height,
+                displayState: { mode: models.VisualContainerDisplayMode.Visible },
+              });
+
+              if (v.title) {
+                await visual.setProperty({ objectName: "title", propertyName: "text" }, { value: v.title });
+                await visual.setProperty({ objectName: "title", propertyName: "visible" }, { value: true });
+              }
+
+              await sleep(200);
+
+              for (const [semanticRole, data] of Object.entries(v.bindings)) {
+                const sanitizedCol = cleanColumnName(data.column);
+                const technicalRole = mapRoleName(v.visualType, semanticRole);
+
+                try {
+                  await visual.addDataField(technicalRole, {
+                    $schema: "http://powerbi.com/product/schema#column",
+                    table: data.table,
+                    column: sanitizedCol,
+                  });
+                } catch {}
+              }
             } catch (e) {
-              /* ignore */
+              console.error("Visual creation error:", e);
             }
           }
-          await sleep(200);
+        }
+      } else {
+        /* ======================================================
+           🔵 FALLBACK: YOUR ORIGINAL SINGLE PAGE LOGIC
+           (UNCHANGED)
+           ====================================================== */
 
-          const bindingEntries = Object.entries(v.bindings);
-          for (const [semanticRole, data] of bindingEntries) {
-            const rawCol = data?.column || "";
-            const sanitizedCol = cleanColumnName(rawCol);
-            const technicalRole = mapRoleName(v.visualType, semanticRole);
+        for (const v of visualsToCreate) {
+          setStatus(`Creating ${v.visualType}...`);
+          try {
+            const { visual } = await page.createVisual(v.visualType as string, {
+              x: v.layout.x,
+              y: v.layout.y,
+              width: v.layout.width,
+              height: v.layout.height,
+              displayState: { mode: models.VisualContainerDisplayMode.Visible },
+            });
 
-            if (data && data.table && sanitizedCol) {
-              let bound = false;
+            if (v.title) {
+              try {
+                await visual.setProperty({ objectName: "title", propertyName: "text" }, { value: v.title });
+                await visual.setProperty({ objectName: "title", propertyName: "visible" }, { value: true });
+              } catch {}
+            }
+
+            await sleep(200);
+
+            for (const [semanticRole, data] of Object.entries(v.bindings)) {
+              const sanitizedCol = cleanColumnName(data.column);
+              const technicalRole = mapRoleName(v.visualType, semanticRole);
+
               try {
                 await visual.addDataField(technicalRole, {
                   $schema: "http://powerbi.com/product/schema#column",
                   table: data.table,
                   column: sanitizedCol,
                 });
-                bound = true;
-              } catch (e) {
-                /* warn */
-              }
-
-              if (!bound) {
-                for (const fallbackTable of uniqueFallbacks) {
-                  if (fallbackTable === data.table) continue;
-                  try {
-                    await visual.addDataField(technicalRole, {
-                      $schema: "http://powerbi.com/product/schema#column",
-                      table: fallbackTable,
-                      column: sanitizedCol,
-                    });
-                    bound = true;
-                    break;
-                  } catch (e) {
-                    /* continue */
-                  }
-                }
-              }
+              } catch {}
             }
+          } catch (e: any) {
+            console.error(`❌ Create failed:`, e);
           }
-        } catch (e: any) {
-          console.error(`❌ Create failed:`, e);
         }
       }
 
