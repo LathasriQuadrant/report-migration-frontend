@@ -125,11 +125,10 @@ export default function PowerBIReport() {
             }
           }
         } catch (e) {
-          console.error("Blob fetch failed", e);
+          console.warn("Blob fetch failed, check CORS or URL visibility.", e);
         }
       }
 
-      // If no metadata or dashboards, fallback to API
       if (!metadata || dashboards.length === 0) {
         try {
           const apiRes = await fetch(API_URL, {
@@ -165,7 +164,7 @@ export default function PowerBIReport() {
         ];
       }
 
-      // Clear first page
+      // Clear first page visuals
       try {
         const existingVisuals = await firstPage.getVisuals();
         for (const v of existingVisuals) {
@@ -181,7 +180,6 @@ export default function PowerBIReport() {
         setStatus(`Creating page: ${dash.dashboardName}`);
         const page = dash === dashboards[0] ? firstPage : await report.addPage(dash.dashboardName);
 
-        // Unified visual collection
         const dashVisuals: (ApiWorksheet | ApiVisual)[] = metadata
           ? metadata.worksheets.filter((ws) => dash.worksheets.includes(ws.name))
           : visualsToCreate.filter((v) => dash.worksheets.includes(v.title));
@@ -189,7 +187,6 @@ export default function PowerBIReport() {
         let currentY = 0;
 
         for (const v of dashVisuals) {
-          // Resolve visual details safely to avoid TS2339
           const vTitle = "name" in v ? v.name : v.title;
           const vType = v.visualType;
 
@@ -203,15 +200,20 @@ export default function PowerBIReport() {
             else if (typeStr.includes("pie")) pbiType = "pieChart";
 
             const { visual } = await page.createVisual(pbiType);
-            await visual.setCustomSize(600, 300);
-            await visual.setCustomPosition(20, currentY);
+
+            // ⭐ FIXED: Use updateShape for size and position
+            await visual.updateShape({
+              width: 600,
+              height: 300,
+              x: 20,
+              y: currentY,
+            });
 
             await visual.setProperty({ objectName: "title", propertyName: "text" }, { value: vTitle });
             await visual.setProperty({ objectName: "title", propertyName: "visible" }, { value: true });
 
             await sleep(200);
 
-            // Handle Data Binding
             if ("columns" in v) {
               for (let i = 0; i < v.columns.length; i++) {
                 const col = v.columns[i];
@@ -320,9 +322,10 @@ export default function PowerBIReport() {
           <h1 className="text-2xl font-bold">Report Preview</h1>
         </div>
         <div
-          className={`flex items-center gap-3 p-4 rounded-lg border shadow-sm ${statusType === "error" ? "bg-red-50 border-red-200 text-red-700" : "bg-white border-blue-100 text-slate-700"}`}
+          className={`flex items-center gap-3 p-4 rounded-lg border shadow-sm ${statusType === "error" ? "bg-red-50 border-red-200 text-red-700" : statusType === "success" ? "bg-green-50 border-green-200 text-green-700" : "bg-white border-blue-100 text-slate-700"}`}
         >
           {statusType === "loading" && <Loader2 className="h-5 w-5 animate-spin text-blue-500" />}
+          {statusType === "success" && <CheckCircle2 className="h-5 w-5 text-green-600" />}
           <div className="flex flex-col flex-1">
             <span className="text-sm font-semibold opacity-70">System Status</span>
             <span className="font-medium">{status}</span>
