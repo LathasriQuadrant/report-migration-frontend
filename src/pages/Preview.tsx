@@ -257,159 +257,81 @@ export default function PowerBIReport() {
   async function createStaticVisuals(report: any) {
     if (executed.current) return;
     executed.current = true;
-    console.group("🚀 Creating Visuals from API");
 
     try {
       setStatus("Fetching visual configuration...");
-      let visualsToCreate: ApiVisual[] = [];
-      let dashboards: any[] = [];
+      let metadata: ExtractionMetadata | null = null;
 
       if (metadataBlobUrl) {
-        try {
-          const apiRes = await fetch(API_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ metadataBlobPath: metadataBlobUrl }),
-          });
-
-          if (apiRes.ok) {
-            const data = await apiRes.json();
-            dashboards = data.runtime_visuals?.dashboards || data.dashboards || [];
-            const mapped = mapApiDataToVisuals(data);
-            if (mapped && mapped.length > 0) {
-              visualsToCreate = mapped;
-              setSource("API");
-            }
-          }
-        } catch (e) {}
+        const apiRes = await fetch(metadataBlobUrl);
+        if (apiRes.ok) {
+          const data = await apiRes.json();
+          metadata = data.metadata || data;
+          setSource("API");
+        }
       }
 
-      if (visualsToCreate.length === 0) {
-        setStatus("No visuals to create (Check API logs)");
-        setStatusType("warning");
-        console.groupEnd();
-        return;
-      }
+      if (!metadata || !metadata.dashboards) return;
 
-      // Normalize Dashboards
-      if (!dashboards || dashboards.length === 0) {
-        dashboards = [
-          {
-            dashboardName: "Report",
-            worksheets: visualsToCreate.map((v) => v.title),
-          },
-        ];
-      }
-
-      setStatus("Switching to Edit mode...");
-      try {
-        await report.switchMode(models.ViewMode.Edit);
-      } catch (e) {}
+      await report.switchMode(models.ViewMode.Edit);
       await sleep(1000);
 
-      const pages = await report.getPages();
-      const firstPage = pages[0];
+      const initialPages = await report.getPages();
+      const firstPage = initialPages[0];
 
-      setStatus("Clearing canvas...");
-      try {
-        const existingVisuals = await firstPage.getVisuals();
-        for (const v of existingVisuals) {
+      for (const dash of metadata.dashboards) {
+        // Create new page or use the first one
+        const page = dash === metadata.dashboards[0] ? firstPage : await report.addPage(dash.dashboardName);
+
+        const dashWorksheets = metadata.worksheets.filter((ws) => dash.worksheets.includes(ws.name));
+        let currentY = 0;
+
+        for (const ws of dashWorksheets) {
           try {
-            await firstPage.deleteVisual(v.name);
-          } catch {}
-        }
-      } catch {}
-      await sleep(500);
+            // FIX 1: Explicit mapping of Tableau types to PBI internal types
+            let pbiType = "barChart"; // Default
+            if (ws.visualType.toLowerCase().includes("map")) pbiType = "filledMap";
+            if (ws.visualType.toLowerCase().includes("table")) pbiType = "table";
+            if (ws.visualType.toLowerCase().includes("pie")) pbiType = "pieChart";
 
-      const cleanReportName = rawReportName.replace(/[^a-zA-Z0-9]/g, "");
-      const FALLBACK_TABLES = [rawReportName, cleanReportName, "Sheet1", "Table1", "Extract", "Data", "MainTable"];
-      const uniqueFallbacks = [...new Set(FALLBACK_TABLES)];
+            // FIX 2: Minimal configuration in createVisual to avoid 'unsupportedProperty'
+            const { visual } = await page.createVisual(pbiType);
 
-      /* =====================================================
-        ⭐ SINGLE UNIFIED PAGE CREATION LOOP
-      ===================================================== */
-      for (const dash of dashboards) {
-        setStatus(`Creating page: ${dash.dashboardName}`);
+            // FIX 3: Set layout and properties AFTER creation
+            await visual.setCustomSize(600, 300);
+            await visual.setCustomPosition(20, currentY);
 
-        // FIX: Power BI pages do not have a .setName() method.
-        // For the first page, we cannot change its internal name,
-        // but we can set its Display Name.
-        let page: any;
-        if (dash === dashboards[0]) {
-          page = firstPage;
-          // Note: Renaming the default first page's display name
-          // via SDK can be restricted in some embed scenarios.
-        } else {
-          // When adding a page, the string passed is the DISPLAY NAME.
-          page = await report.addPage(dash.dashboardName);
-        }
-
-        const dashVisuals = visualsToCreate.filter((v) => dash.worksheets.includes(v.title));
-
-        for (const v of dashVisuals) {
-          setStatus(`Adding ${v.title} to ${dash.dashboardName}`);
-
-          try {
-            const { visual } = await page.createVisual(v.visualType as string, {
-              x: v.layout.x,
-              y: v.layout.y,
-              width: v.layout.width,
-              height: v.layout.height,
-              displayState: { mode: models.VisualContainerDisplayMode.Visible },
-            });
-
-            if (v.title) {
-              await visual.setProperty({ objectName: "title", propertyName: "text" }, { value: v.title });
+            if (ws.name) {
+              await visual.setProperty({ objectName: "title", propertyName: "text" }, { value: ws.name });
               await visual.setProperty({ objectName: "title", propertyName: "visible" }, { value: true });
             }
 
-            await sleep(200);
+            // 4. Data Binding
+            for (let i = 0; i < ws.columns.length; i++) {
+              const col = ws.columns[i];
+              const role = i === 0 ? "Category" : "Y"; // Basic logic: Axis vs Values
 
-            for (const [semanticRole, data] of Object.entries(v.bindings)) {
-              // Ensure data and data.column exist before processing
-              if (!data || !data.column) continue;
-
-              const sanitizedCol = cleanColumnName(data.column);
-              const technicalRole = mapRoleName(v.visualType, semanticRole);
-
-              let bound = false;
-              try {
-                await visual.addDataField(technicalRole, {
-                  $schema: "http://powerbi.com/product/schema#column",
-                  table: data.table,
-                  column: sanitizedCol,
-                });
-                bound = true;
-              } catch {}
-
-              if (!bound) {
-                for (const fallbackTable of uniqueFallbacks) {
-                  try {
-                    await visual.addDataField(technicalRole, {
-                      $schema: "http://powerbi.com/product/schema#column",
-                      table: fallbackTable,
-                      column: sanitizedCol,
-                    });
-                    break;
-                  } catch {}
-                }
-              }
+              await visual.addDataField(role, {
+                $schema: "http://powerbi.com/product/schema#column",
+                table: col.table,
+                column: cleanColumnName(col.column),
+              });
             }
-          } catch (e: any) {
-            console.error(`❌ Create failed:`, e);
+
+            currentY += 350;
+            await sleep(300);
+          } catch (e) {
+            console.error(`❌ Create failed for ${ws.name}:`, e);
           }
         }
       }
 
       await report.save();
-      setStatus("Visuals generated successfully!");
       setStatusType("success");
-    } catch (err: any) {
-      console.error("❌ Critical Error:", err);
-      setStatus("Error: " + err.message);
+      setStatus("Visuals generated!");
+    } catch (err) {
+      console.error("Critical Error:", err);
       setStatusType("error");
-    } finally {
-      console.groupEnd();
     }
   }
 
