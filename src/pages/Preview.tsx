@@ -4,6 +4,7 @@ import * as models from "powerbi-models";
 import { service, factories } from "powerbi-client";
 import { Loader2, CheckCircle2, XCircle, Globe, AlertTriangle, ArrowLeft } from "lucide-react";
 
+// UI Components
 import { Button } from "@/components/ui/button";
 import AppLayout from "@/components/layout/AppLayout";
 
@@ -13,6 +14,7 @@ import "powerbi-report-authoring";
     📍 CONFIGURATION & INTERFACES
    ---------------------------------------------------- */
 const API_URL = "https://visuals-json-gdfth9dsbmhrgcb0.eastus-01.azurewebsites.net/runtime-visuals";
+
 const pbiService = new service.Service(factories.hpmFactory, factories.wpmpFactory, factories.routerFactory);
 
 interface ApiWorksheet {
@@ -60,6 +62,7 @@ export default function PowerBIReport() {
   const isEmbedding = useRef(false);
   const executed = useRef(false);
 
+  /* ---------------- SESSION DATA ---------------- */
   const workspaceId = sessionStorage.getItem("workspace_id");
   const reportId = sessionStorage.getItem("generated_report_id");
   const datasetId = sessionStorage.getItem("generated_dataset_id");
@@ -68,11 +71,7 @@ export default function PowerBIReport() {
 
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-  const cleanColumnName = (colName: string) => {
-    if (!colName) return "";
-    return colName.replace(/^(cnt|sum|avg|min|max|count|distinct):/i, "");
-  };
-
+  /* ----------- DATA MAPPING HELPERS ----------- */
   const mapApiDataToVisuals = (apiResponse: any): ApiVisual[] | null => {
     try {
       if (!apiResponse) return null;
@@ -91,9 +90,15 @@ export default function PowerBIReport() {
     }
   };
 
+  const cleanColumnName = (colName: string) => {
+    if (!colName) return "";
+    return colName.replace(/^(cnt|sum|avg|min|max|count|distinct):/i, "");
+  };
+
   const mapRoleName = (visualType: string, semanticRole: string): string => {
     const type = visualType.toLowerCase();
     const role = semanticRole.toLowerCase();
+
     if (type.includes("table") || type.includes("matrix")) return "Values";
     if (type.includes("bar") || type.includes("column") || type.includes("line")) {
       if (role === "category" || role === "axis") return "Category";
@@ -113,6 +118,7 @@ export default function PowerBIReport() {
       let visualsToCreate: ApiVisual[] = [];
       let dashboards: ApiDashboard[] = [];
 
+      // Attempt to fetch metadata from Blob
       if (metadataBlobUrl) {
         try {
           const blobRes = await fetch(metadataBlobUrl);
@@ -125,10 +131,11 @@ export default function PowerBIReport() {
             }
           }
         } catch (e) {
-          console.warn("Blob fetch failed, check CORS or URL visibility.", e);
+          console.warn("Blob fetch failed, falling back to API POST.");
         }
       }
 
+      // Fallback to POST API if needed
       if (!metadata || dashboards.length === 0) {
         try {
           const apiRes = await fetch(API_URL, {
@@ -164,7 +171,7 @@ export default function PowerBIReport() {
         ];
       }
 
-      // Clear first page visuals
+      // Clear the first page
       try {
         const existingVisuals = await firstPage.getVisuals();
         for (const v of existingVisuals) {
@@ -201,12 +208,12 @@ export default function PowerBIReport() {
 
             const { visual } = await page.createVisual(pbiType);
 
-            // ⭐ FIXED: Use updateShape for size and position
+            // ⭐ FIXED: Use updateShape for positioning and sizing
             await visual.updateShape({
-              width: 600,
-              height: 300,
               x: 20,
               y: currentY,
+              width: 600,
+              height: 300,
             });
 
             await visual.setProperty({ objectName: "title", propertyName: "text" }, { value: vTitle });
@@ -227,9 +234,9 @@ export default function PowerBIReport() {
                   .catch(() => {});
               }
             } else if ("bindings" in v) {
-              for (const [semanticRole, data] of Object.entries(v.bindings)) {
+              for (const [role, data] of Object.entries(v.bindings)) {
                 if (!data?.column) continue;
-                const techRole = mapRoleName(vType, semanticRole);
+                const techRole = mapRoleName(vType, role);
                 let bound = false;
                 await visual
                   .addDataField(techRole, {
@@ -277,6 +284,7 @@ export default function PowerBIReport() {
     }
   }
 
+  /* ----------- EMBED REPORT ----------- */
   useEffect(() => {
     let report: any;
     if (isEmbedding.current) return;
@@ -322,10 +330,9 @@ export default function PowerBIReport() {
           <h1 className="text-2xl font-bold">Report Preview</h1>
         </div>
         <div
-          className={`flex items-center gap-3 p-4 rounded-lg border shadow-sm ${statusType === "error" ? "bg-red-50 border-red-200 text-red-700" : statusType === "success" ? "bg-green-50 border-green-200 text-green-700" : "bg-white border-blue-100 text-slate-700"}`}
+          className={`flex items-center gap-3 p-4 rounded-lg border shadow-sm ${statusType === "error" ? "bg-red-50 border-red-200 text-red-700" : "bg-white border-blue-100 text-slate-700"}`}
         >
           {statusType === "loading" && <Loader2 className="h-5 w-5 animate-spin text-blue-500" />}
-          {statusType === "success" && <CheckCircle2 className="h-5 w-5 text-green-600" />}
           <div className="flex flex-col flex-1">
             <span className="text-sm font-semibold opacity-70">System Status</span>
             <span className="font-medium">{status}</span>
