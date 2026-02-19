@@ -118,7 +118,7 @@ export default function PowerBIReport() {
       let visualsToCreate: ApiVisual[] = [];
       let dashboards: ApiDashboard[] = [];
 
-      // Attempt to fetch metadata from Blob
+      // Attempt to fetch metadata from Blob (Handle CORS failure gracefully)
       if (metadataBlobUrl) {
         try {
           const blobRes = await fetch(metadataBlobUrl);
@@ -131,11 +131,11 @@ export default function PowerBIReport() {
             }
           }
         } catch (e) {
-          console.warn("Blob fetch failed, falling back to API POST.");
+          console.warn("Blob fetch failed (CORS), falling back to API POST.");
         }
       }
 
-      // Fallback to POST API if needed
+      // Fallback to POST API if blob fetch failed
       if (!metadata || dashboards.length === 0) {
         try {
           const apiRes = await fetch(API_URL, {
@@ -171,7 +171,7 @@ export default function PowerBIReport() {
         ];
       }
 
-      // Clear the first page
+      // Clear the first page visuals
       try {
         const existingVisuals = await firstPage.getVisuals();
         for (const v of existingVisuals) {
@@ -208,12 +208,13 @@ export default function PowerBIReport() {
 
             const { visual } = await page.createVisual(pbiType);
 
-            // ⭐ FIXED: Use updateShape for positioning and sizing
-            await visual.updateShape({
+            // ⭐ FIXED: Use updateLayout for positioning and sizing
+            await visual.updateLayout({
               x: 20,
               y: currentY,
               width: 600,
               height: 300,
+              displayState: { mode: models.VisualContainerDisplayMode.Visible },
             });
 
             await visual.setProperty({ objectName: "title", propertyName: "text" }, { value: vTitle });
