@@ -114,9 +114,6 @@ export default function PowerBIReport() {
     try {
       setStatus("Fetching visual configuration...");
 
-      let visuals: ApiVisual[] = [];
-      let dashboards: any[] = [];
-
       const apiRes = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -124,8 +121,8 @@ export default function PowerBIReport() {
       });
 
       const data = await apiRes.json();
-      visuals = data.visuals || [];
-      dashboards = data.dashboards || [];
+      const visuals = data.visuals || [];
+      const dashboards = data.dashboards || [];
 
       if (!visuals.length) {
         setStatus("No visuals returned");
@@ -137,58 +134,79 @@ export default function PowerBIReport() {
       await sleep(800);
 
       /* ------------------------------------------------
-       GET EXISTING PAGES (NO NEW PAGE CREATION)
+       🧠 VISUAL TYPE NORMALIZER (CRITICAL FIX)
     ------------------------------------------------ */
-      const pages = await report.getPages();
+      const normalizeType = (type: string) => {
+        const map: any = {
+          tableEx: "table",
+          clusteredBarChart: "barChart",
+          clusteredColumnChart: "columnChart",
+          lineChart: "lineChart",
+          pieChart: "pieChart",
+          donutChart: "donutChart",
+        };
+        return map[type] || type;
+      };
 
       /* ------------------------------------------------
-       CREATE LOOKUP MAP
+       GET ALL PAGES
+    ------------------------------------------------ */
+      let pages = await report.getPages();
+
+      /* ------------------------------------------------
+       DELETE EXTRA PAGES (KEEP ONLY REQUIRED)
+    ------------------------------------------------ */
+      while (pages.length > dashboards.length) {
+        await report.deletePage(pages[pages.length - 1].name);
+        pages = await report.getPages();
+      }
+
+      /* ------------------------------------------------
+       BUILD LOOKUP
     ------------------------------------------------ */
       const visualMap = new Map();
       visuals.forEach((v: any) => visualMap.set(v.title, v));
 
       /* ------------------------------------------------
-       LOOP DASHBOARDS → MAP TO PAGE INDEX
+       DASHBOARD → PAGE MAPPING
     ------------------------------------------------ */
       for (let i = 0; i < dashboards.length; i++) {
         const dashboard = dashboards[i];
-        const page = pages[i]; // IMPORTANT FIX
+        const page = pages[i];
 
         if (!page) continue;
 
         await page.setActive();
         await sleep(400);
 
-        /* ---------------- CLEAR PAGE ---------------- */
+        /* CLEAR PAGE */
         const existing = await page.getVisuals();
         for (const v of existing) {
           await page.deleteVisual(v.name);
         }
 
-        /* ---------------- ADD VISUALS ---------------- */
-        for (const sheetName of dashboard.worksheets) {
-          const v = visualMap.get(sheetName);
+        /* CREATE VISUALS */
+        for (const sheet of dashboard.worksheets) {
+          const v = visualMap.get(sheet);
           if (!v) continue;
 
           try {
-            const { visual } = await page.createVisual(v.visualType, {
+            const { visual } = await page.createVisual(normalizeType(v.visualType), {
               x: v.layout.x,
               y: v.layout.y,
               width: v.layout.width,
               height: v.layout.height,
             });
 
-            /* -------- SAFE TITLE SETTING (FIXED) -------- */
+            /* SET TITLE */
             await visual.updateSettings({
-              title: {
-                text: v.title,
-                visible: true,
-              },
+              title: { visible: true, text: v.title },
             });
 
-            /* -------- DATA BINDINGS -------- */
+            /* BIND DATA */
             for (const role of Object.keys(v.bindings)) {
               const roleName = mapRoleName(v.visualType, role);
+
               const bindings = Array.isArray(v.bindings[role]) ? v.bindings[role] : [v.bindings[role]];
 
               for (const b of bindings) {
@@ -200,7 +218,7 @@ export default function PowerBIReport() {
               }
             }
           } catch (err) {
-            console.error("Visual creation failed:", err);
+            console.error("❌ Visual creation failed:", err);
           }
         }
       }
@@ -213,7 +231,6 @@ export default function PowerBIReport() {
       setStatusType("error");
     }
   }
-
   /* ----------- EMBED REPORT ----------- */
   useEffect(() => {
     let report: any;
