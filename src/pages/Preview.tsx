@@ -199,9 +199,9 @@ export default function PowerBIReport() {
             });
 
             /* SET TITLE */
-            await visual.updateSettings({
-              title: { visible: true, text: v.title },
-            });
+            await visual.setProperty({ objectName: "title", propertyName: "visible" }, { value: true });
+
+            await visual.setProperty({ objectName: "title", propertyName: "text" }, { value: v.title });
 
             /* BIND DATA */
             for (const role of Object.keys(v.bindings)) {
