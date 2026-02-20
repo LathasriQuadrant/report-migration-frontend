@@ -9,6 +9,9 @@ import AppLayout from "@/components/layout/AppLayout";
 
 import "powerbi-report-authoring";
 
+/* ----------------------------------------------------
+    📍 CONFIGURATION & CONSTANTS
+   ---------------------------------------------------- */
 const API_URL = "https://visuals-json-gdfth9dsbmhrgcb0.eastus-01.azurewebsites.net/runtime-visuals";
 const pbiService = new service.Service(factories.hpmFactory, factories.wpmpFactory, factories.routerFactory);
 
@@ -89,7 +92,11 @@ export default function PowerBIReport() {
         setSource("API");
       }
 
-      if (visualsToCreate.length === 0) return;
+      if (visualsToCreate.length === 0) {
+        setStatus("No visuals found in response.");
+        setStatusType("warning");
+        return;
+      }
 
       setStatus("Entering Edit Mode...");
       await report.switchMode(models.ViewMode.Edit);
@@ -99,14 +106,23 @@ export default function PowerBIReport() {
       const firstPage = pages[0];
 
       // Clear initial page
-      const visuals = await firstPage.getVisuals();
-      for (const v of visuals) await firstPage.deleteVisual(v.name);
+      const existingVisuals = await firstPage.getVisuals();
+      for (const v of existingVisuals) {
+        try {
+          await firstPage.deleteVisual(v.name);
+        } catch (e) {}
+      }
 
-      const uniqueFallbacks = [...new Set([rawReportName, "Sheet1", "Table1", "Data"])];
+      const uniqueFallbacks = [...new Set([rawReportName, "Sheet1", "Table1", "Data", "MainTable"])];
 
-      // Use sequential naming: Page 1, Page 2...
-      for (let i = 0; i < dashboards.length; i++) {
-        const dash = dashboards[i];
+      // Normalize dashboards if empty
+      const finalDashboards =
+        dashboards && dashboards.length > 0
+          ? dashboards
+          : [{ dashboardName: "Page 1", worksheets: visualsToCreate.map((v) => v.title) }];
+
+      for (let i = 0; i < finalDashboards.length; i++) {
+        const dash = finalDashboards[i];
         const pageName = `Page ${i + 1}`;
         setStatus(`Creating ${pageName}...`);
 
@@ -116,18 +132,17 @@ export default function PowerBIReport() {
 
         for (const v of dashVisuals) {
           try {
-            // 1. CREATE VISUAL
-            const createResult = await page.createVisual(v.visualType);
-            const visual = createResult.visual;
-
-            // 2. POSITION (Fix for updateLayout error)
-            await visual.setVisualLayout({
+            // ⭐ FIX: Instead of calling setVisualLayout (which fails),
+            // we pass the layout directly into the creation config.
+            const createResult = await page.createVisual(v.visualType, {
               x: v.layout.x,
               y: v.layout.y,
               width: v.layout.width,
               height: v.layout.height,
               displayState: { mode: models.VisualContainerDisplayMode.Visible },
             });
+
+            const visual = createResult.visual;
 
             if (v.title) {
               await visual.setProperty({ objectName: "title", propertyName: "text" }, { value: v.title });
@@ -136,7 +151,7 @@ export default function PowerBIReport() {
 
             await sleep(500);
 
-            // 3. BIND DATA (Support for Arrays and Objects)
+            // BIND DATA
             for (const [role, data] of Object.entries(v.bindings)) {
               const techRole = mapRoleName(v.visualType, role);
               const bindingItems = Array.isArray(data) ? data : [data];
@@ -179,9 +194,11 @@ export default function PowerBIReport() {
       setStatus("Migration successful!");
       setStatusType("success");
     } catch (err: any) {
-      console.error("❌ Error:", err);
+      console.error("❌ Critical Error:", err);
       setStatus("Error generating visuals");
       setStatusType("error");
+    } finally {
+      console.groupEnd();
     }
   }
 
@@ -209,6 +226,12 @@ export default function PowerBIReport() {
             tokenType: models.TokenType.Embed,
             permissions: models.Permissions.All,
             viewMode: models.ViewMode.Edit,
+            settings: {
+              panes: {
+                fields: { visible: true, expanded: true },
+                visualizations: { visible: true },
+              },
+            },
           });
           report.on("rendered", () => createStaticVisuals(report));
         }
@@ -234,8 +257,9 @@ export default function PowerBIReport() {
         >
           {statusType === "loading" && <Loader2 className="h-5 w-5 animate-spin text-blue-500" />}
           {statusType === "success" && <CheckCircle2 className="h-5 w-5 text-green-600" />}
+          {statusType === "error" && <XCircle className="h-5 w-5 text-red-600" />}
           <div className="flex flex-col flex-1">
-            <span className="text-sm font-semibold opacity-70 uppercase">System Status</span>
+            <span className="text-sm font-semibold opacity-70 uppercase tracking-wider">System Status</span>
             <span className="font-medium">{status}</span>
           </div>
           <div className="px-3 py-1 bg-white/50 rounded-full border border-black/5 text-xs font-medium">
