@@ -1,18 +1,20 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom"; // ➕ Added for navigation
 import * as models from "powerbi-models";
 import { service, factories } from "powerbi-client";
 import { Loader2, CheckCircle2, XCircle, Globe, AlertTriangle, ArrowLeft } from "lucide-react";
 
+// ➕ Import UI Components to match Migration page style
 import { Button } from "@/components/ui/button";
 import AppLayout from "@/components/layout/AppLayout";
 
 import "powerbi-report-authoring";
 
 /* ----------------------------------------------------
-    📍 CONFIGURATION & CONSTANTS
+   📍 CONFIGURATION & CONSTANTS
    ---------------------------------------------------- */
 const API_URL = "https://visuals-json-gdfth9dsbmhrgcb0.eastus-01.azurewebsites.net/runtime-visuals";
+
 const pbiService = new service.Service(factories.hpmFactory, factories.wpmpFactory, factories.routerFactory);
 
 interface ApiBinding {
@@ -29,11 +31,11 @@ interface ApiVisual {
     width: number;
     height: number;
   };
-  bindings: Record<string, ApiBinding | ApiBinding[]>;
+  bindings: Record<string, ApiBinding>;
 }
 
 export default function PowerBIReport() {
-  const navigate = useNavigate();
+  const navigate = useNavigate(); // ➕ Init hook
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState("Initializing...");
   const [statusType, setStatusType] = useState<"loading" | "success" | "error" | "warning">("loading");
@@ -42,6 +44,7 @@ export default function PowerBIReport() {
   const isEmbedding = useRef(false);
   const executed = useRef(false);
 
+  /* ---------------- SESSION DATA ---------------- */
   const workspaceId = sessionStorage.getItem("workspace_id");
   const reportId = sessionStorage.getItem("generated_report_id");
   const datasetId = sessionStorage.getItem("generated_dataset_id");
@@ -50,23 +53,57 @@ export default function PowerBIReport() {
 
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+  /* ----------- DATA MAPPING HELPERS ----------- */
+  const mapApiDataToVisuals = (apiResponse: any): ApiVisual[] | null => {
+    try {
+      if (!apiResponse) return null;
+      const visualsArray = apiResponse.runtime_visuals?.visuals || apiResponse.visuals;
+      console.log(visualsArray);
+      if (!Array.isArray(visualsArray)) return null;
+
+      return visualsArray.map((v: any) => ({
+        visualType: v.visualType,
+        title: v.title,
+        layout: v.layout,
+        bindings: v.bindings,
+      }));
+    } catch (e) {
+      console.error("Mapping error:", e);
+      return null;
+    }
+  };
+
+  // Helper to strip prefixes
   const cleanColumnName = (colName: string) => {
     if (!colName) return "";
     return colName.replace(/^(cnt|sum|avg|min|max|count|distinct):/i, "");
   };
 
+  // Helper to map roles
   const mapRoleName = (visualType: string, semanticRole: string): string => {
     const type = visualType.toLowerCase();
     const role = semanticRole.toLowerCase();
+
     if (type.includes("table") || type.includes("matrix")) return "Values";
-    if (type.includes("bar") || type.includes("column") || type.includes("line")) {
+
+    if (
+      type.includes("bar") ||
+      type.includes("column") ||
+      type.includes("line") ||
+      type.includes("area") ||
+      type.includes("scatter")
+    ) {
       if (role === "category" || role === "axis") return "Category";
-      return "Y";
+      if (role === "values" || role === "y") return "Y";
+      if (role === "legend" || role === "series") return "Series";
+      if (type.includes("scatter") && role === "x") return "X";
     }
+
     if (type.includes("pie") || type.includes("donut")) {
       if (role === "legend" || role === "category") return "Category";
-      return "Y";
+      if (role === "values") return "Y";
     }
+
     return semanticRole;
   };
 
@@ -77,82 +114,102 @@ export default function PowerBIReport() {
 
     try {
       setStatus("Fetching visual configuration...");
+
       let visualsToCreate: ApiVisual[] = [];
       let dashboards: any[] = [];
 
-      const apiRes = await fetch(API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ metadataBlobPath: metadataBlobUrl }),
-      });
+      if (metadataBlobUrl) {
+        try {
+          const apiRes = await fetch(API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ metadataBlobPath: metadataBlobUrl }),
+          });
 
-      if (apiRes.ok) {
-        const data = await apiRes.json();
-        visualsToCreate = data.visuals || [];
-        dashboards = data.dashboards || [];
-        setSource("API");
+          if (apiRes.ok) {
+            const data = await apiRes.json();
+
+            const mapped = mapApiDataToVisuals(data);
+            if (mapped && mapped.length > 0) {
+              visualsToCreate = mapped;
+              dashboards = data.dashboards || [];
+              setSource("API");
+            }
+          }
+        } catch (e) {
+          console.error("API error:", e);
+        }
       }
 
       if (visualsToCreate.length === 0) {
-        setStatus("No visuals found in configuration");
+        setStatus("No visuals to create (Check API logs)");
         setStatusType("warning");
         console.groupEnd();
         return;
       }
 
-      // Normalize Dashboards to ensure we always have at least one page
-      const finalDashboards =
-        dashboards && dashboards.length > 0
-          ? dashboards
-          : [{ dashboardName: "Page 1", worksheets: visualsToCreate.map((v) => v.title) }];
-
       setStatus("Switching to Edit mode...");
-      try {
-        await report.switchMode(models.ViewMode.Edit);
-      } catch (e) {
-        /* ignore */
-      }
-      await sleep(1500);
+      await report.switchMode(models.ViewMode.Edit);
+      await sleep(1000);
 
-      const pages = await report.getPages();
-      const firstPage = pages[0];
+      /* ----------------------------------------------------------
+       🧠 BUILD VISUAL LOOKUP BY TITLE (worksheet name)
+    ---------------------------------------------------------- */
+      const visualMap = new Map<string, ApiVisual>();
 
-      // Clear initial page canvas
-      try {
-        const existingVisuals = await firstPage.getVisuals();
-        for (const v of existingVisuals) {
-          await firstPage.deleteVisual(v.name);
+      visualsToCreate.forEach((v) => {
+        visualMap.set(v.title, v);
+      });
+
+      /* ----------------------------------------------------------
+       🧠 GET EXISTING PAGES
+    ---------------------------------------------------------- */
+      let pages = await report.getPages();
+
+      /* ----------------------------------------------------------
+       🧠 CREATE PAGES PER DASHBOARD
+    ---------------------------------------------------------- */
+      for (let i = 0; i < dashboards.length; i++) {
+        const dashboard = dashboards[i];
+        const pageName = dashboard.dashboardName || `Page ${i + 1}`;
+
+        setStatus(`Preparing page: ${pageName}`);
+
+        let page = pages.find((p: any) => p.displayName === pageName);
+
+        // Create page if not exists
+        if (!page) {
+          page = await report.addPage(pageName);
+          pages = await report.getPages();
         }
-      } catch (e) {
-        /* ignore */
-      }
 
-      const uniqueFallbacks = [...new Set([rawReportName, "Sheet1", "Table1", "Data", "MainTable"])];
+        // Activate page
+        await page.setActive();
+        await sleep(500);
 
-      /* =====================================================
-      ⭐ SEQUENTIAL PAGE CREATION LOOP
-    ===================================================== */
-      for (let i = 0; i < finalDashboards.length; i++) {
-        const dash = finalDashboards[i];
-        const pageName = `Page ${i + 1}`;
-        setStatus(`Creating ${pageName}: ${dash.dashboardName}`);
+        /* ------------------------------------------------------
+         🧹 CLEAR EXISTING VISUALS
+      ------------------------------------------------------ */
+        try {
+          const existing = await page.getVisuals();
+          for (const v of existing) {
+            await page.deleteVisual(v.name);
+          }
+        } catch (e) {
+          console.warn("Clear page failed", e);
+        }
 
-        // Use the existing first page for the first dashboard, create new pages for others
-        const page = i === 0 ? firstPage : await report.addPage(pageName);
+        /* ------------------------------------------------------
+         📊 CREATE VISUALS FOR THIS DASHBOARD
+      ------------------------------------------------------ */
+        for (const worksheet of dashboard.worksheets) {
+          const v = visualMap.get(worksheet);
+          if (!v) continue;
 
-        // Filter visuals that belong to this dashboard page
-        const dashVisuals = visualsToCreate.filter((v) => dash.worksheets.includes(v.title));
-
-        for (const v of dashVisuals) {
-          setStatus(`Adding ${v.title} to ${pageName}`);
+          setStatus(`Creating ${v.title} on ${pageName}`);
 
           try {
-            // STEP 1: Create visual with NO layout properties to avoid "Unsupported property" error
-            const createResult = await page.createVisual(v.visualType);
-            const visual = createResult.visual;
-
-            // STEP 2: Apply Layout (Size/Position) using the validated SDK method
-            await visual.setVisualLayout({
+            const { visual } = await page.createVisual(v.visualType as string, {
               x: v.layout.x,
               y: v.layout.y,
               width: v.layout.width,
@@ -160,59 +217,38 @@ export default function PowerBIReport() {
               displayState: { mode: models.VisualContainerDisplayMode.Visible },
             });
 
-            // Set Properties like Title
+            // Title
             if (v.title) {
-              try {
-                await visual.setProperty({ objectName: "title", propertyName: "text" }, { value: v.title });
-                await visual.setProperty({ objectName: "title", propertyName: "visible" }, { value: true });
-              } catch (e) {
-                /* ignore */
-              }
+              await visual.setProperty({ objectName: "title", propertyName: "text" }, { value: v.title });
+              await visual.setProperty({ objectName: "title", propertyName: "visible" }, { value: true });
             }
 
-            await sleep(500); // Give Power BI time to mount the visual before binding data
+            await sleep(200);
 
-            // STEP 3: DATA BINDING (Handles both Arrays for Tables and Objects for Charts)
-            for (const [semanticRole, data] of Object.entries(v.bindings)) {
-              const technicalRole = mapRoleName(v.visualType, semanticRole);
+            /* -----------------------------------------------
+             🧠 HANDLE MULTI / SINGLE BINDINGS
+          ----------------------------------------------- */
+            for (const [role, binding] of Object.entries(v.bindings)) {
+              const roleName = mapRoleName(v.visualType, role);
 
-              // Normalize data to an array (Sheet 1 uses arrays, others use objects)
-              const bindingItems = Array.isArray(data) ? data : [data];
+              const bindArray = Array.isArray(binding) ? binding : [binding];
 
-              for (const item of bindingItems) {
-                if (!item.column) continue;
-                const colName = cleanColumnName(item.column);
-                let bound = false;
+              for (const b of bindArray) {
+                const col = cleanColumnName(b.column);
 
                 try {
-                  await visual.addDataField(technicalRole, {
+                  await visual.addDataField(roleName, {
                     $schema: "http://powerbi.com/product/schema#column",
-                    table: item.table,
-                    column: colName,
+                    table: b.table,
+                    column: col,
                   });
-                  bound = true;
                 } catch (e) {
-                  /* binding failed, try fallback */
-                }
-
-                if (!bound) {
-                  for (const fallbackTable of uniqueFallbacks) {
-                    try {
-                      await visual.addDataField(technicalRole, {
-                        $schema: "http://powerbi.com/product/schema#column",
-                        table: fallbackTable,
-                        column: colName,
-                      });
-                      break;
-                    } catch (e) {
-                      /* try next fallback */
-                    }
-                  }
+                  console.warn("Binding failed:", b);
                 }
               }
             }
-          } catch (e: any) {
-            console.error(`❌ Visual generation failed for ${v.title}:`, e);
+          } catch (e) {
+            console.error("Visual creation failed:", e);
           }
         }
       }
@@ -229,13 +265,19 @@ export default function PowerBIReport() {
     }
   }
 
+  /* ----------- EMBED REPORT ----------- */
   useEffect(() => {
     let report: any;
     if (isEmbedding.current) return;
     isEmbedding.current = true;
 
     async function init() {
-      if (!workspaceId || !reportId) return;
+      if (!workspaceId || !reportId) {
+        setStatus("Missing Session Data");
+        setStatusType("error");
+        return;
+      }
+
       try {
         const res = await fetch("https://visuals-json-gdfth9dsbmhrgcb0.eastus-01.azurewebsites.net/embed-token", {
           method: "POST",
@@ -243,6 +285,7 @@ export default function PowerBIReport() {
           body: JSON.stringify({ workspaceId, reportId, datasetId }),
         });
         const { embedToken, embedUrl } = await res.json();
+
         if (containerRef.current) {
           pbiService.reset(containerRef.current);
           report = pbiService.embed(containerRef.current, {
@@ -260,39 +303,66 @@ export default function PowerBIReport() {
               },
             },
           });
-          report.on("rendered", () => createStaticVisuals(report));
+
+          report.on("rendered", () => {
+            console.log("📊 Report rendered");
+            createStaticVisuals(report);
+          });
+
+          report.on("error", (e: any) => {
+            console.error("PBI Error:", e.detail);
+            setStatus("Power BI Error");
+            setStatusType("error");
+          });
         }
       } catch (e: any) {
-        setStatus("Init failed");
+        setStatus("Init failed: " + e.message);
         setStatusType("error");
       }
     }
     init();
   }, []);
 
+  // ✅ FIX: Wrapped in AppLayout and added Header for consistent flow
   return (
     <AppLayout>
       <div className="flex flex-col gap-4 p-6 h-full">
+        {/* Header Section (Matches Migration.tsx style) */}
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => navigate("/migration")}>
             <ArrowLeft />
           </Button>
           <h1 className="text-2xl font-bold">Report Preview</h1>
         </div>
+
+        {/* Status Bar */}
         <div
-          className={`flex items-center gap-3 p-4 rounded-lg border shadow-sm transition-all duration-300 ${statusType === "error" ? "bg-red-50 border-red-200 text-red-700" : statusType === "success" ? "bg-green-50 border-green-200 text-green-700" : "bg-white border-blue-100 text-slate-700"}`}
+          className={`flex items-center gap-3 p-4 rounded-lg border shadow-sm transition-all duration-300 ${
+            statusType === "error"
+              ? "bg-red-50 border-red-200 text-red-700"
+              : statusType === "success"
+                ? "bg-green-50 border-green-200 text-green-700"
+                : statusType === "warning"
+                  ? "bg-amber-50 border-amber-200 text-amber-700"
+                  : "bg-white border-blue-100 text-slate-700"
+          }`}
         >
           {statusType === "loading" && <Loader2 className="h-5 w-5 animate-spin text-blue-500" />}
           {statusType === "success" && <CheckCircle2 className="h-5 w-5 text-green-600" />}
           {statusType === "error" && <XCircle className="h-5 w-5 text-red-600" />}
+          {statusType === "warning" && <AlertTriangle className="h-5 w-5 text-amber-600" />}
+
           <div className="flex flex-col flex-1">
-            <span className="text-sm font-semibold opacity-70 uppercase tracking-wider">System Status</span>
+            <span className="text-sm font-semibold uppercase tracking-wider opacity-70">System Status</span>
             <span className="font-medium">{status}</span>
           </div>
-          <div className="px-3 py-1 bg-white/50 rounded-full border border-black/5 text-xs font-medium">
-            Config: {source}
+          <div className="flex items-center gap-2 px-3 py-1 bg-white/50 rounded-full border border-black/5 text-xs font-medium">
+            <Globe className="h-3 w-3" />
+            Config Source: {source}
           </div>
         </div>
+
+        {/* Power BI Container */}
         <div className="relative flex-1 w-full min-h-[600px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <div ref={containerRef} className="h-full w-full" />
         </div>
