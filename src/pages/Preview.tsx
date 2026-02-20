@@ -13,7 +13,6 @@ import "powerbi-report-authoring";
     📍 CONFIGURATION & INTERFACES
    ---------------------------------------------------- */
 const API_URL = "https://visuals-json-gdfth9dsbmhrgcb0.eastus-01.azurewebsites.net/runtime-visuals";
-
 const pbiService = new service.Service(factories.hpmFactory, factories.wpmpFactory, factories.routerFactory);
 
 interface ApiBinding {
@@ -48,6 +47,7 @@ export default function PowerBIReport() {
   const isEmbedding = useRef(false);
   const executed = useRef(false);
 
+  /* ---------------- SESSION DATA ---------------- */
   const workspaceId = sessionStorage.getItem("workspace_id");
   const reportId = sessionStorage.getItem("generated_report_id");
   const datasetId = sessionStorage.getItem("generated_dataset_id");
@@ -56,6 +56,7 @@ export default function PowerBIReport() {
 
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+  /* ----------- DATA MAPPING HELPERS ----------- */
   const cleanColumnName = (colName: string) => {
     if (!colName) return "";
     return colName.replace(/^(cnt|sum|avg|min|max|count|distinct):/i, "");
@@ -64,7 +65,6 @@ export default function PowerBIReport() {
   const mapRoleName = (visualType: string, semanticRole: string): string => {
     const type = visualType.toLowerCase();
     const role = semanticRole.toLowerCase();
-
     if (type.includes("table") || type.includes("matrix")) return "Values";
     if (type.includes("bar") || type.includes("column") || type.includes("line")) {
       if (role === "category" || role === "axis") return "Category";
@@ -97,25 +97,26 @@ export default function PowerBIReport() {
 
           if (apiRes.ok) {
             const data = await apiRes.json();
-            visualsToCreate = data.visuals || data.runtime_visuals?.visuals || [];
+            visualsToCreate = data.visuals || [];
             dashboards = data.dashboards || [];
             setSource("API");
           }
         } catch (e) {
-          console.error("API call failed:", e);
+          console.error("API Error:", e);
         }
       }
 
       if (visualsToCreate.length === 0) {
-        setStatus("No visuals to create");
+        setStatus("No visuals found");
         setStatusType("warning");
         return;
       }
 
+      // Ensure Dashboard 1 exists if API only returns a flat list
       if (dashboards.length === 0) {
         dashboards = [
           {
-            dashboardName: "Report Home",
+            dashboardName: "Dashboard 1",
             worksheets: visualsToCreate.map((v) => v.title),
           },
         ];
@@ -128,24 +129,31 @@ export default function PowerBIReport() {
       const initialPages = await report.getPages();
       const firstPage = initialPages[0];
 
+      // Clean default Page 1
       try {
-        const existingVisuals = await firstPage.getVisuals();
-        for (const v of existingVisuals) await firstPage.deleteVisual(v.name);
+        const visuals = await firstPage.getVisuals();
+        for (const v of visuals) await firstPage.deleteVisual(v.name);
       } catch (e) {}
 
       const uniqueFallbacks = [...new Set([rawReportName, "Sheet1", "Table1", "Extract", "Data", "MainTable"])];
 
+      /* =====================================================
+        ⭐ DASHBOARD TO PAGE LOOP
+      ===================================================== */
       for (const dash of dashboards) {
         setStatus(`Creating page: ${dash.dashboardName}`);
 
+        // Use existing page for first dashboard, create new ones for others
         const page = dash === dashboards[0] ? firstPage : await report.addPage(dash.dashboardName);
+
+        // Filter visuals for THIS dashboard
         const dashVisuals = visualsToCreate.filter((v) => dash.worksheets.includes(v.title));
 
         for (const v of dashVisuals) {
           setStatus(`Adding ${v.title} to ${dash.dashboardName}`);
           try {
-            // ⭐ FIX: Pass layout directly into createVisual to avoid setVisualLayout TypeError
-            const { visual } = await page.createVisual(v.visualType, {
+            // 1. Create Visual with Layout included to avoid TypeError
+            const createResult = await page.createVisual(v.visualType, {
               x: v.layout.x,
               y: v.layout.y,
               width: v.layout.width,
@@ -153,22 +161,22 @@ export default function PowerBIReport() {
               displayState: { mode: models.VisualContainerDisplayMode.Visible },
             });
 
-            // Set Properties
+            const visual = createResult.visual;
+
+            // 2. Set Properties
             if (v.title) {
-              try {
-                await visual.setProperty({ objectName: "title", propertyName: "text" }, { value: v.title });
-                await visual.setProperty({ objectName: "title", propertyName: "visible" }, { value: true });
-              } catch (e) {}
+              await visual.setProperty({ objectName: "title", propertyName: "text" }, { value: v.title });
+              await visual.setProperty({ objectName: "title", propertyName: "visible" }, { value: true });
             }
 
             await sleep(500);
 
-            // Bind Data Fields
-            for (const [semanticRole, data] of Object.entries(v.bindings)) {
-              const techRole = mapRoleName(v.visualType, semanticRole);
-              const dataItems = Array.isArray(data) ? data : [data];
+            // 3. Bind Data
+            for (const [role, data] of Object.entries(v.bindings)) {
+              const techRole = mapRoleName(v.visualType, role);
+              const items = Array.isArray(data) ? data : [data];
 
-              for (const item of dataItems) {
+              for (const item of items) {
                 if (!item.column) continue;
                 const sanitizedCol = cleanColumnName(item.column);
                 let bound = false;
@@ -197,7 +205,7 @@ export default function PowerBIReport() {
               }
             }
           } catch (err) {
-            console.error(`❌ Visual creation failed for ${v.title}:`, err);
+            console.error(`❌ Creation failed for ${v.title}:`, err);
           }
         }
       }
@@ -220,12 +228,7 @@ export default function PowerBIReport() {
     isEmbedding.current = true;
 
     async function init() {
-      if (!workspaceId || !reportId) {
-        setStatus("Missing Session Data");
-        setStatusType("error");
-        return;
-      }
-
+      if (!workspaceId || !reportId) return;
       try {
         const res = await fetch("https://visuals-json-gdfth9dsbmhrgcb0.eastus-01.azurewebsites.net/embed-token", {
           method: "POST",
@@ -253,14 +256,7 @@ export default function PowerBIReport() {
           });
 
           report.on("rendered", () => {
-            console.log("📊 Report rendered");
             createStaticVisuals(report);
-          });
-
-          report.on("error", (e: any) => {
-            console.error("PBI Error:", e.detail);
-            setStatus("Power BI Error");
-            setStatusType("error");
           });
         }
       } catch (e: any) {
@@ -287,23 +283,19 @@ export default function PowerBIReport() {
               ? "bg-red-50 border-red-200 text-red-700"
               : statusType === "success"
                 ? "bg-green-50 border-green-200 text-green-700"
-                : statusType === "warning"
-                  ? "bg-amber-50 border-amber-200 text-amber-700"
-                  : "bg-white border-blue-100 text-slate-700"
+                : "bg-white border-blue-100 text-slate-700"
           }`}
         >
           {statusType === "loading" && <Loader2 className="h-5 w-5 animate-spin text-blue-500" />}
           {statusType === "success" && <CheckCircle2 className="h-5 w-5 text-green-600" />}
           {statusType === "error" && <XCircle className="h-5 w-5 text-red-600" />}
-          {statusType === "warning" && <AlertTriangle className="h-5 w-5 text-amber-600" />}
-
           <div className="flex flex-col flex-1">
-            <span className="text-sm font-semibold uppercase tracking-wider opacity-70">System Status</span>
+            <span className="text-sm font-semibold opacity-70">System Status</span>
             <span className="font-medium">{status}</span>
           </div>
-          <div className="flex items-center gap-2 px-3 py-1 bg-white/50 rounded-full border border-black/5 text-xs font-medium">
+          <div className="flex items-center gap-2 px-3 py-1 bg-white/50 rounded-full border text-xs font-medium">
             <Globe className="h-3 w-3" />
-            Config Source: {source}
+            Config: {source}
           </div>
         </div>
 
