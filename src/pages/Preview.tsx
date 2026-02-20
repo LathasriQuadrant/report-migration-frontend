@@ -73,9 +73,10 @@ export default function PowerBIReport() {
   async function createStaticVisuals(report: any) {
     if (executed.current) return;
     executed.current = true;
+    console.group("🚀 Creating Visuals from API");
 
     try {
-      setStatus("Fetching visuals...");
+      setStatus("Fetching visual configuration...");
       let visualsToCreate: ApiVisual[] = [];
       let dashboards: any[] = [];
 
@@ -93,48 +94,65 @@ export default function PowerBIReport() {
       }
 
       if (visualsToCreate.length === 0) {
-        setStatus("No visuals found in response.");
+        setStatus("No visuals found in configuration");
         setStatusType("warning");
+        console.groupEnd();
         return;
       }
 
-      setStatus("Entering Edit Mode...");
-      await report.switchMode(models.ViewMode.Edit);
-      await sleep(1500);
-
-      const pages = await report.getPages();
-      const firstPage = pages[0];
-
-      // Clear initial page
-      const existingVisuals = await firstPage.getVisuals();
-      for (const v of existingVisuals) {
-        try {
-          await firstPage.deleteVisual(v.name);
-        } catch (e) {}
-      }
-
-      const uniqueFallbacks = [...new Set([rawReportName, "Sheet1", "Table1", "Data", "MainTable"])];
-
-      // Normalize dashboards if empty
+      // Normalize Dashboards to ensure we always have at least one page
       const finalDashboards =
         dashboards && dashboards.length > 0
           ? dashboards
           : [{ dashboardName: "Page 1", worksheets: visualsToCreate.map((v) => v.title) }];
 
+      setStatus("Switching to Edit mode...");
+      try {
+        await report.switchMode(models.ViewMode.Edit);
+      } catch (e) {
+        /* ignore */
+      }
+      await sleep(1500);
+
+      const pages = await report.getPages();
+      const firstPage = pages[0];
+
+      // Clear initial page canvas
+      try {
+        const existingVisuals = await firstPage.getVisuals();
+        for (const v of existingVisuals) {
+          await firstPage.deleteVisual(v.name);
+        }
+      } catch (e) {
+        /* ignore */
+      }
+
+      const uniqueFallbacks = [...new Set([rawReportName, "Sheet1", "Table1", "Data", "MainTable"])];
+
+      /* =====================================================
+      ⭐ SEQUENTIAL PAGE CREATION LOOP
+    ===================================================== */
       for (let i = 0; i < finalDashboards.length; i++) {
         const dash = finalDashboards[i];
         const pageName = `Page ${i + 1}`;
-        setStatus(`Creating ${pageName}...`);
+        setStatus(`Creating ${pageName}: ${dash.dashboardName}`);
 
+        // Use the existing first page for the first dashboard, create new pages for others
         const page = i === 0 ? firstPage : await report.addPage(pageName);
 
+        // Filter visuals that belong to this dashboard page
         const dashVisuals = visualsToCreate.filter((v) => dash.worksheets.includes(v.title));
 
         for (const v of dashVisuals) {
+          setStatus(`Adding ${v.title} to ${pageName}`);
+
           try {
-            // ⭐ FIX: Instead of calling setVisualLayout (which fails),
-            // we pass the layout directly into the creation config.
-            const createResult = await page.createVisual(v.visualType, {
+            // STEP 1: Create visual with NO layout properties to avoid "Unsupported property" error
+            const createResult = await page.createVisual(v.visualType);
+            const visual = createResult.visual;
+
+            // STEP 2: Apply Layout (Size/Position) using the validated SDK method
+            await visual.setVisualLayout({
               x: v.layout.x,
               y: v.layout.y,
               width: v.layout.width,
@@ -142,60 +160,69 @@ export default function PowerBIReport() {
               displayState: { mode: models.VisualContainerDisplayMode.Visible },
             });
 
-            const visual = createResult.visual;
-
+            // Set Properties like Title
             if (v.title) {
-              await visual.setProperty({ objectName: "title", propertyName: "text" }, { value: v.title });
-              await visual.setProperty({ objectName: "title", propertyName: "visible" }, { value: true });
+              try {
+                await visual.setProperty({ objectName: "title", propertyName: "text" }, { value: v.title });
+                await visual.setProperty({ objectName: "title", propertyName: "visible" }, { value: true });
+              } catch (e) {
+                /* ignore */
+              }
             }
 
-            await sleep(500);
+            await sleep(500); // Give Power BI time to mount the visual before binding data
 
-            // BIND DATA
-            for (const [role, data] of Object.entries(v.bindings)) {
-              const techRole = mapRoleName(v.visualType, role);
+            // STEP 3: DATA BINDING (Handles both Arrays for Tables and Objects for Charts)
+            for (const [semanticRole, data] of Object.entries(v.bindings)) {
+              const technicalRole = mapRoleName(v.visualType, semanticRole);
+
+              // Normalize data to an array (Sheet 1 uses arrays, others use objects)
               const bindingItems = Array.isArray(data) ? data : [data];
 
               for (const item of bindingItems) {
                 if (!item.column) continue;
-                const sanitizedCol = cleanColumnName(item.column);
+                const colName = cleanColumnName(item.column);
                 let bound = false;
 
                 try {
-                  await visual.addDataField(techRole, {
+                  await visual.addDataField(technicalRole, {
                     $schema: "http://powerbi.com/product/schema#column",
                     table: item.table,
-                    column: sanitizedCol,
+                    column: colName,
                   });
                   bound = true;
-                } catch (e) {}
+                } catch (e) {
+                  /* binding failed, try fallback */
+                }
 
                 if (!bound) {
-                  for (const fb of uniqueFallbacks) {
+                  for (const fallbackTable of uniqueFallbacks) {
                     try {
-                      await visual.addDataField(techRole, {
+                      await visual.addDataField(technicalRole, {
                         $schema: "http://powerbi.com/product/schema#column",
-                        table: fb,
-                        column: sanitizedCol,
+                        table: fallbackTable,
+                        column: colName,
                       });
                       break;
-                    } catch (e) {}
+                    } catch (e) {
+                      /* try next fallback */
+                    }
                   }
                 }
               }
             }
-          } catch (e) {
-            console.error(`❌ Visual failed: ${v.title}`, e);
+          } catch (e: any) {
+            console.error(`❌ Visual generation failed for ${v.title}:`, e);
           }
         }
       }
 
       await report.save();
-      setStatus("Migration successful!");
+      setStatus("Visuals generated successfully!");
       setStatusType("success");
     } catch (err: any) {
       console.error("❌ Critical Error:", err);
-      setStatus("Error generating visuals");
+      setStatus("Error: " + err.message);
       setStatusType("error");
     } finally {
       console.groupEnd();
