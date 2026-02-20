@@ -144,58 +144,57 @@ export default function PowerBIReport() {
       }
       await sleep(1000);
 
-      // 1. Build a lookup map of visuals by their title (e.g., "Sheet 1")
+      // 1. Build lookup map
       const visualMap = new Map<string, ApiVisual>();
       visualsToCreate.forEach((v) => visualMap.set(v.title, v));
 
       /* ----------------------------------------------------------
          🧠 ORPHAN VISUALS & UNIFIED PAGE PROCESSING
       ---------------------------------------------------------- */
-      // Track which visuals are mapped to a dashboard
       const assignedVisuals = new Set<string>();
       dashboards.forEach((d) => {
         d.worksheets.forEach((w: string) => assignedVisuals.add(w));
       });
 
-      // Find visuals that have no dashboard assigned
+      // Find visuals without a dashboard (like Sheet 5)
       const orphanWorksheets = visualsToCreate.filter((v) => !assignedVisuals.has(v.title)).map((v) => v.title);
 
-      // Create a unified list of pages to process
-      const pagesToProcess = dashboards.map((d) => ({ worksheets: d.worksheets }));
+      // Create a processing list indicating if a page is for orphans
+      const pagesToProcess = dashboards.map((d) => ({
+        worksheets: d.worksheets,
+        isOrphan: false,
+      }));
 
-      // If unmapped visuals exist, dynamically create an extra page config for them
       if (orphanWorksheets.length > 0) {
-        pagesToProcess.push({ worksheets: orphanWorksheets });
+        pagesToProcess.push({
+          worksheets: orphanWorksheets,
+          isOrphan: true,
+        });
       }
 
-      // 2. Fallbacks for data binding
       const cleanReportName = rawReportName.replace(/[^a-zA-Z0-9]/g, "");
       const FALLBACK_TABLES = [rawReportName, cleanReportName, "Sheet1", "Table1", "Extract", "Data", "MainTable"];
       const uniqueFallbacks = [...new Set(FALLBACK_TABLES)];
 
       let pages = await report.getPages();
 
-      // 3. Loop through Unified Pages List
+      /* ----------------------------------------------------------
+         📊 LOOP THROUGH UNIFIED PAGES
+      ---------------------------------------------------------- */
       for (let i = 0; i < pagesToProcess.length; i++) {
         const config = pagesToProcess[i];
-        const expectedPageName = `Page ${i + 1}`; // Strict Sequential Naming
+        const expectedPageName = `Page ${i + 1}`;
         let targetPage = pages[i];
 
-        // Ensure page exists and matches strictly "Page X"
+        // Create page if it doesn't exist
         if (!targetPage) {
           targetPage = await report.addPage(expectedPageName);
-          pages = await report.getPages(); // Refresh the array
-        } else if (targetPage.displayName !== expectedPageName) {
-          try {
-            await targetPage.rename(expectedPageName);
-          } catch (e) {
-            console.warn(`Could not rename to ${expectedPageName}`);
-          }
+          pages = await report.getPages();
         }
 
         setStatus(`Preparing ${expectedPageName}...`);
 
-        // 🔥 Safely switch page and wait for the event before proceeding
+        // Switch to the page
         await new Promise<void>((resolve) => {
           const handler = () => {
             report.off("pageChanged", handler);
@@ -205,10 +204,18 @@ export default function PowerBIReport() {
           targetPage.setActive();
         });
 
-        // Always fetch the active page context after switching
         const page = await report.getActivePage();
 
-        // Clear existing visuals on this page
+        // 🔥 STRICT RENAMING AFTER ACTIVATION (Forces "Page 1", "Page 2", etc.)
+        if (page.displayName !== expectedPageName) {
+          try {
+            await page.rename(expectedPageName);
+          } catch (e) {
+            console.warn(`Rename to ${expectedPageName} failed:`, e);
+          }
+        }
+
+        // Clear existing visuals
         try {
           const existingVisuals = await page.getVisuals();
           for (const v of existingVisuals) {
@@ -224,16 +231,29 @@ export default function PowerBIReport() {
 
         await sleep(500);
 
-        // 4. Create Visuals for this page configuration
+        // Track Y position so orphans can stack neatly instead of overlapping
+        let currentOrphanY = 40;
+
+        // 4. Create Visuals
         for (const sheetName of config.worksheets) {
           const v = visualMap.get(sheetName);
           if (!v) continue;
 
+          // 🔥 RESET Y POSITION FOR ORPHANS SO THEY DON'T RENDER OFF SCREEN
+          let finalX = v.layout.x;
+          let finalY = v.layout.y;
+
+          if (config.isOrphan) {
+            finalX = 40;
+            finalY = currentOrphanY;
+            currentOrphanY += v.layout.height + 20; // Add gap for next visual
+          }
+
           setStatus(`Creating ${v.visualType} on ${expectedPageName}...`);
           try {
             const { visual } = await page.createVisual(normalizeType(v.visualType), {
-              x: v.layout.x,
-              y: v.layout.y,
+              x: finalX,
+              y: finalY,
               width: v.layout.width,
               height: v.layout.height,
               displayState: { mode: models.VisualContainerDisplayMode.Visible },
@@ -249,7 +269,7 @@ export default function PowerBIReport() {
             }
             await sleep(200);
 
-            // Data binding loop
+            // Data binding
             const bindingEntries = Object.entries(v.bindings);
             for (const [semanticRole, data] of bindingEntries) {
               const technicalRole = mapRoleName(v.visualType, semanticRole);
