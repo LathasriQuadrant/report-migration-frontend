@@ -110,126 +110,150 @@ export default function PowerBIReport() {
   async function createStaticVisuals(report: any) {
     if (executed.current) return;
     executed.current = true;
+    console.group("🚀 Creating Visuals from API");
 
     try {
       setStatus("Fetching visual configuration...");
+      let visualsToCreate: ApiVisual[] = [];
 
-      const apiRes = await fetch(API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ metadataBlobPath: metadataBlobUrl }),
-      });
+      if (metadataBlobUrl) {
+        try {
+          const apiRes = await fetch(API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ metadataBlobPath: metadataBlobUrl }),
+          });
 
-      const data = await apiRes.json();
-      const visuals = data.visuals || [];
-      const dashboards = data.dashboards || [];
+          if (apiRes.ok) {
+            const data = await apiRes.json();
+            const mapped = mapApiDataToVisuals(data);
+            if (mapped && mapped.length > 0) {
+              visualsToCreate = mapped;
+              setSource("API");
+            }
+          }
+        } catch (e) {
+          /* ignore */
+        }
+      }
 
-      if (!visuals.length) {
-        setStatus("No visuals returned");
+      if (visualsToCreate.length === 0) {
+        setStatus("No visuals to create (Check API logs)");
         setStatusType("warning");
+        console.groupEnd();
         return;
       }
 
-      await report.switchMode(models.ViewMode.Edit);
-      await sleep(800);
+      setStatus("Switching to Edit mode...");
+      try {
+        await report.switchMode(models.ViewMode.Edit);
+      } catch (e) {
+        /* ignore */
+      }
+      await sleep(1000);
 
-      /* ------------------------------------------------
-       🧠 VISUAL TYPE NORMALIZER (CRITICAL FIX)
-    ------------------------------------------------ */
-      const normalizeType = (type: string) => {
-        const map: any = {
-          tableEx: "table",
-          clusteredBarChart: "barChart",
-          clusteredColumnChart: "columnChart",
-          lineChart: "lineChart",
-          pieChart: "pieChart",
-          donutChart: "donutChart",
-        };
-        return map[type] || type;
-      };
-
-      /* ------------------------------------------------
-       GET ALL PAGES
-    ------------------------------------------------ */
-      let pages = await report.getPages();
-
-      /* ------------------------------------------------
-       DELETE EXTRA PAGES (KEEP ONLY REQUIRED)
-    ------------------------------------------------ */
-      while (pages.length > dashboards.length) {
-        await report.deletePage(pages[pages.length - 1].name);
-        pages = await report.getPages();
+      let page: any;
+      try {
+        page = await report.getActivePage();
+      } catch (e) {
+        const pages = await report.getPages();
+        page = pages[0];
       }
 
-      /* ------------------------------------------------
-       BUILD LOOKUP
-    ------------------------------------------------ */
-      const visualMap = new Map();
-      visuals.forEach((v: any) => visualMap.set(v.title, v));
-
-      /* ------------------------------------------------
-       DASHBOARD → PAGE MAPPING
-    ------------------------------------------------ */
-      for (let i = 0; i < dashboards.length; i++) {
-        const dashboard = dashboards[i];
-        const page = pages[i];
-
-        if (!page) continue;
-
-        await page.setActive();
-        await sleep(400);
-
-        /* CLEAR PAGE */
-        const existing = await page.getVisuals();
-        for (const v of existing) {
-          await page.deleteVisual(v.name);
-        }
-
-        /* CREATE VISUALS */
-        for (const sheet of dashboard.worksheets) {
-          const v = visualMap.get(sheet);
-          if (!v) continue;
-
+      setStatus("Clearing canvas...");
+      try {
+        const existingVisuals = await page.getVisuals();
+        for (const v of existingVisuals) {
           try {
-            const { visual } = await page.createVisual(normalizeType(v.visualType), {
-              x: v.layout.x,
-              y: v.layout.y,
-              width: v.layout.width,
-              height: v.layout.height,
-            });
+            await page.deleteVisual(v.name);
+          } catch (e) {
+            /* ignore */
+          }
+        }
+      } catch (e) {
+        /* ignore */
+      }
+      await sleep(500);
 
-            /* ✅ CORRECT TITLE API */
-            await visual.setProperty({ objectName: "title", propertyName: "visible" }, { value: true });
+      const cleanReportName = rawReportName.replace(/[^a-zA-Z0-9]/g, "");
+      const FALLBACK_TABLES = [rawReportName, cleanReportName, "Sheet1", "Table1", "Extract", "Data", "MainTable"];
+      const uniqueFallbacks = [...new Set(FALLBACK_TABLES)];
 
-            await visual.setProperty({ objectName: "title", propertyName: "text" }, { value: v.title });
-            /* BIND DATA */
-            for (const role of Object.keys(v.bindings)) {
-              const roleName = mapRoleName(v.visualType, role);
+      for (const v of visualsToCreate) {
+        setStatus(`Creating ${v.visualType}...`);
+        try {
+          const { visual } = await page.createVisual(v.visualType as string, {
+            x: v.layout.x,
+            y: v.layout.y,
+            width: v.layout.width,
+            height: v.layout.height,
+            displayState: { mode: models.VisualContainerDisplayMode.Visible },
+          });
 
-              const bindings = Array.isArray(v.bindings[role]) ? v.bindings[role] : [v.bindings[role]];
+          if (v.title) {
+            try {
+              await visual.setProperty({ objectName: "title", propertyName: "text" }, { value: v.title });
+              await visual.setProperty({ objectName: "title", propertyName: "visible" }, { value: true });
+            } catch (e) {
+              /* ignore */
+            }
+          }
+          await sleep(200);
 
-              for (const b of bindings) {
-                await visual.addDataField(roleName, {
+          const bindingEntries = Object.entries(v.bindings);
+          for (const [semanticRole, data] of bindingEntries) {
+            const rawCol = data?.column || "";
+            const sanitizedCol = cleanColumnName(rawCol);
+            const technicalRole = mapRoleName(v.visualType, semanticRole);
+
+            if (data && data.table && sanitizedCol) {
+              let bound = false;
+              try {
+                await visual.addDataField(technicalRole, {
                   $schema: "http://powerbi.com/product/schema#column",
-                  table: b.table,
-                  column: cleanColumnName(b.column),
+                  table: data.table,
+                  column: sanitizedCol,
                 });
+                bound = true;
+              } catch (e) {
+                /* warn */
+              }
+
+              if (!bound) {
+                for (const fallbackTable of uniqueFallbacks) {
+                  if (fallbackTable === data.table) continue;
+                  try {
+                    await visual.addDataField(technicalRole, {
+                      $schema: "http://powerbi.com/product/schema#column",
+                      table: fallbackTable,
+                      column: sanitizedCol,
+                    });
+                    bound = true;
+                    break;
+                  } catch (e) {
+                    /* continue */
+                  }
+                }
               }
             }
-          } catch (err) {
-            console.error("❌ Visual creation failed:", err);
           }
+        } catch (e: any) {
+          console.error(`❌ Create failed:`, e);
         }
       }
 
       await report.save();
-      setStatus("Dashboards mapped successfully!");
+      setStatus("Visuals generated successfully!");
       setStatusType("success");
     } catch (err: any) {
+      console.error("❌ Critical Error:", err);
       setStatus("Error: " + err.message);
       setStatusType("error");
+    } finally {
+      console.groupEnd();
     }
   }
+
   /* ----------- EMBED REPORT ----------- */
   useEffect(() => {
     let report: any;
