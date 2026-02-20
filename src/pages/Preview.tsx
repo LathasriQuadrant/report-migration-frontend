@@ -1,17 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom"; // ➕ Added for navigation
+import { useNavigate } from "react-router-dom";
 import * as models from "powerbi-models";
 import { service, factories } from "powerbi-client";
 import { Loader2, CheckCircle2, XCircle, Globe, AlertTriangle, ArrowLeft } from "lucide-react";
 
-// ➕ Import UI Components to match Migration page style
 import { Button } from "@/components/ui/button";
 import AppLayout from "@/components/layout/AppLayout";
 
 import "powerbi-report-authoring";
 
 /* ----------------------------------------------------
-   📍 CONFIGURATION & CONSTANTS
+    📍 CONFIGURATION & INTERFACES
    ---------------------------------------------------- */
 const API_URL = "https://visuals-json-gdfth9dsbmhrgcb0.eastus-01.azurewebsites.net/runtime-visuals";
 
@@ -31,11 +30,16 @@ interface ApiVisual {
     width: number;
     height: number;
   };
-  bindings: Record<string, ApiBinding>;
+  bindings: Record<string, ApiBinding | ApiBinding[]>;
+}
+
+interface ApiDashboard {
+  dashboardName: string;
+  worksheets: string[];
 }
 
 export default function PowerBIReport() {
-  const navigate = useNavigate(); // ➕ Init hook
+  const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState("Initializing...");
   const [statusType, setStatusType] = useState<"loading" | "success" | "error" | "warning">("loading");
@@ -58,7 +62,6 @@ export default function PowerBIReport() {
     try {
       if (!apiResponse) return null;
       const visualsArray = apiResponse.runtime_visuals?.visuals || apiResponse.visuals;
-      console.log(visualsArray);
       if (!Array.isArray(visualsArray)) return null;
 
       return visualsArray.map((v: any) => ({
@@ -73,37 +76,24 @@ export default function PowerBIReport() {
     }
   };
 
-  // Helper to strip prefixes
   const cleanColumnName = (colName: string) => {
     if (!colName) return "";
     return colName.replace(/^(cnt|sum|avg|min|max|count|distinct):/i, "");
   };
 
-  // Helper to map roles
   const mapRoleName = (visualType: string, semanticRole: string): string => {
     const type = visualType.toLowerCase();
     const role = semanticRole.toLowerCase();
 
     if (type.includes("table") || type.includes("matrix")) return "Values";
-
-    if (
-      type.includes("bar") ||
-      type.includes("column") ||
-      type.includes("line") ||
-      type.includes("area") ||
-      type.includes("scatter")
-    ) {
+    if (type.includes("bar") || type.includes("column") || type.includes("line")) {
       if (role === "category" || role === "axis") return "Category";
-      if (role === "values" || role === "y") return "Y";
-      if (role === "legend" || role === "series") return "Series";
-      if (type.includes("scatter") && role === "x") return "X";
+      return "Y";
     }
-
     if (type.includes("pie") || type.includes("donut")) {
       if (role === "legend" || role === "category") return "Category";
-      if (role === "values") return "Y";
+      return "Y";
     }
-
     return semanticRole;
   };
 
@@ -115,6 +105,7 @@ export default function PowerBIReport() {
     try {
       setStatus("Fetching visual configuration...");
       let visualsToCreate: ApiVisual[] = [];
+      let dashboards: ApiDashboard[] = [];
 
       if (metadataBlobUrl) {
         try {
@@ -126,124 +117,123 @@ export default function PowerBIReport() {
 
           if (apiRes.ok) {
             const data = await apiRes.json();
-            const mapped = mapApiDataToVisuals(data);
-            if (mapped && mapped.length > 0) {
-              visualsToCreate = mapped;
-              setSource("API");
-            }
+            visualsToCreate = mapApiDataToVisuals(data) || [];
+            dashboards = data.dashboards || [];
+            setSource("API");
           }
         } catch (e) {
-          /* ignore */
+          console.error("API call failed:", e);
         }
       }
 
       if (visualsToCreate.length === 0) {
-        setStatus("No visuals to create (Check API logs)");
+        setStatus("No visuals to create");
         setStatusType("warning");
-        console.groupEnd();
         return;
       }
 
-      setStatus("Switching to Edit mode...");
-      try {
-        await report.switchMode(models.ViewMode.Edit);
-      } catch (e) {
-        /* ignore */
+      // If no dashboards returned, create a default one
+      if (dashboards.length === 0) {
+        dashboards = [
+          {
+            dashboardName: "Report Home",
+            worksheets: visualsToCreate.map((v) => v.title),
+          },
+        ];
       }
+
+      setStatus("Switching to Edit mode...");
+      await report.switchMode(models.ViewMode.Edit);
       await sleep(1000);
 
-      let page: any;
-      try {
-        page = await report.getActivePage();
-      } catch (e) {
-        const pages = await report.getPages();
-        page = pages[0];
-      }
+      const initialPages = await report.getPages();
+      const firstPage = initialPages[0];
 
-      setStatus("Clearing canvas...");
+      // Clear standard Page 1
       try {
-        const existingVisuals = await page.getVisuals();
-        for (const v of existingVisuals) {
+        const existingVisuals = await firstPage.getVisuals();
+        for (const v of existingVisuals) await firstPage.deleteVisual(v.name);
+      } catch (e) {}
+
+      const uniqueFallbacks = [...new Set([rawReportName, "Sheet1", "Table1", "Extract", "Data", "MainTable"])];
+
+      /* =====================================================
+        ⭐ DASHBOARD TO PAGE LOOP
+      ===================================================== */
+      for (const dash of dashboards) {
+        setStatus(`Creating page: ${dash.dashboardName}`);
+
+        // Use firstPage for the first dash, create new pages for others
+        const page = dash === dashboards[0] ? firstPage : await report.addPage(dash.dashboardName);
+
+        // Filter visuals that belong to this dashboard/page
+        const dashVisuals = visualsToCreate.filter((v) => dash.worksheets.includes(v.title));
+
+        for (const v of dashVisuals) {
+          setStatus(`Adding ${v.title} to ${dash.dashboardName}`);
           try {
-            await page.deleteVisual(v.name);
-          } catch (e) {
-            /* ignore */
-          }
-        }
-      } catch (e) {
-        /* ignore */
-      }
-      await sleep(500);
+            // 1. Create Visual with clean type
+            const { visual } = await page.createVisual(v.visualType);
 
-      const cleanReportName = rawReportName.replace(/[^a-zA-Z0-9]/g, "");
-      const FALLBACK_TABLES = [rawReportName, cleanReportName, "Sheet1", "Table1", "Extract", "Data", "MainTable"];
-      const uniqueFallbacks = [...new Set(FALLBACK_TABLES)];
+            // 2. Set Visual Layout (Position/Size)
+            await visual.setVisualLayout({
+              x: v.layout.x,
+              y: v.layout.y,
+              width: v.layout.width,
+              height: v.layout.height,
+              displayState: { mode: models.VisualContainerDisplayMode.Visible },
+            });
 
-      for (const v of visualsToCreate) {
-        setStatus(`Creating ${v.visualType}...`);
-        try {
-          const { visual } = await page.createVisual(v.visualType as string, {
-            x: v.layout.x,
-            y: v.layout.y,
-            width: v.layout.width,
-            height: v.layout.height,
-            displayState: { mode: models.VisualContainerDisplayMode.Visible },
-          });
-
-          if (v.title) {
-            try {
+            // 3. Set Properties
+            if (v.title) {
               await visual.setProperty({ objectName: "title", propertyName: "text" }, { value: v.title });
               await visual.setProperty({ objectName: "title", propertyName: "visible" }, { value: true });
-            } catch (e) {
-              /* ignore */
             }
-          }
-          await sleep(200);
 
-          const bindingEntries = Object.entries(v.bindings);
-          for (const [semanticRole, data] of bindingEntries) {
-            const rawCol = data?.column || "";
-            const sanitizedCol = cleanColumnName(rawCol);
-            const technicalRole = mapRoleName(v.visualType, semanticRole);
+            await sleep(300); // Wait for visual to register on canvas
 
-            if (data && data.table && sanitizedCol) {
-              let bound = false;
-              try {
-                await visual.addDataField(technicalRole, {
-                  $schema: "http://powerbi.com/product/schema#column",
-                  table: data.table,
-                  column: sanitizedCol,
-                });
-                bound = true;
-              } catch (e) {
-                /* warn */
-              }
+            // 4. Bind Data Fields
+            for (const [semanticRole, data] of Object.entries(v.bindings)) {
+              const techRole = mapRoleName(v.visualType, semanticRole);
+              const dataItems = Array.isArray(data) ? data : [data];
 
-              if (!bound) {
-                for (const fallbackTable of uniqueFallbacks) {
-                  if (fallbackTable === data.table) continue;
-                  try {
-                    await visual.addDataField(technicalRole, {
-                      $schema: "http://powerbi.com/product/schema#column",
-                      table: fallbackTable,
-                      column: sanitizedCol,
-                    });
-                    bound = true;
-                    break;
-                  } catch (e) {
-                    /* continue */
+              for (const item of dataItems) {
+                if (!item.column) continue;
+                const sanitizedCol = cleanColumnName(item.column);
+                let bound = false;
+
+                try {
+                  await visual.addDataField(techRole, {
+                    $schema: "http://powerbi.com/product/schema#column",
+                    table: item.table,
+                    column: sanitizedCol,
+                  });
+                  bound = true;
+                } catch (err) {}
+
+                // Fallback attempt if specific table fails
+                if (!bound) {
+                  for (const fbTable of uniqueFallbacks) {
+                    try {
+                      await visual.addDataField(techRole, {
+                        $schema: "http://powerbi.com/product/schema#column",
+                        table: fbTable,
+                        column: sanitizedCol,
+                      });
+                      break;
+                    } catch (e) {}
                   }
                 }
               }
             }
+          } catch (err) {
+            console.error(`❌ Visual creation failed for ${v.title}:`, err);
           }
-        } catch (e: any) {
-          console.error(`❌ Create failed:`, e);
         }
       }
 
       await report.save();
-      setStatus("Visuals generated successfully!");
+      setStatus("Migration successful!");
       setStatusType("success");
     } catch (err: any) {
       console.error("❌ Critical Error:", err);
@@ -312,11 +302,9 @@ export default function PowerBIReport() {
     init();
   }, []);
 
-  // ✅ FIX: Wrapped in AppLayout and added Header for consistent flow
   return (
     <AppLayout>
       <div className="flex flex-col gap-4 p-6 h-full">
-        {/* Header Section (Matches Migration.tsx style) */}
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => navigate("/migration")}>
             <ArrowLeft />
@@ -324,7 +312,6 @@ export default function PowerBIReport() {
           <h1 className="text-2xl font-bold">Report Preview</h1>
         </div>
 
-        {/* Status Bar */}
         <div
           className={`flex items-center gap-3 p-4 rounded-lg border shadow-sm transition-all duration-300 ${
             statusType === "error"
@@ -351,7 +338,6 @@ export default function PowerBIReport() {
           </div>
         </div>
 
-        {/* Power BI Container */}
         <div className="relative flex-1 w-full min-h-[600px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <div ref={containerRef} className="h-full w-full" />
         </div>
