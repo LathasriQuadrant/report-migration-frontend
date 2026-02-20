@@ -198,11 +198,10 @@ export default function PowerBIReport() {
               height: v.layout.height,
             });
 
-            /* SET TITLE */
+            /* ✅ CORRECT TITLE API */
             await visual.setProperty({ objectName: "title", propertyName: "visible" }, { value: true });
 
             await visual.setProperty({ objectName: "title", propertyName: "text" }, { value: v.title });
-
             /* BIND DATA */
             for (const role of Object.keys(v.bindings)) {
               const roleName = mapRoleName(v.visualType, role);
