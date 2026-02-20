@@ -110,158 +110,107 @@ export default function PowerBIReport() {
   async function createStaticVisuals(report: any) {
     if (executed.current) return;
     executed.current = true;
-    console.group("🚀 Creating Visuals from API");
 
     try {
       setStatus("Fetching visual configuration...");
 
-      let visualsToCreate: ApiVisual[] = [];
+      let visuals: ApiVisual[] = [];
       let dashboards: any[] = [];
 
-      if (metadataBlobUrl) {
-        try {
-          const apiRes = await fetch(API_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ metadataBlobPath: metadataBlobUrl }),
-          });
+      const apiRes = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ metadataBlobPath: metadataBlobUrl }),
+      });
 
-          if (apiRes.ok) {
-            const data = await apiRes.json();
+      const data = await apiRes.json();
+      visuals = data.visuals || [];
+      dashboards = data.dashboards || [];
 
-            const mapped = mapApiDataToVisuals(data);
-            if (mapped && mapped.length > 0) {
-              visualsToCreate = mapped;
-              dashboards = data.dashboards || [];
-              setSource("API");
-            }
-          }
-        } catch (e) {
-          console.error("API error:", e);
-        }
-      }
-
-      if (visualsToCreate.length === 0) {
-        setStatus("No visuals to create (Check API logs)");
+      if (!visuals.length) {
+        setStatus("No visuals returned");
         setStatusType("warning");
-        console.groupEnd();
         return;
       }
 
-      setStatus("Switching to Edit mode...");
       await report.switchMode(models.ViewMode.Edit);
-      await sleep(1000);
+      await sleep(800);
 
-      /* ----------------------------------------------------------
-       🧠 BUILD VISUAL LOOKUP BY TITLE (worksheet name)
-    ---------------------------------------------------------- */
-      const visualMap = new Map<string, ApiVisual>();
+      /* ------------------------------------------------
+       GET EXISTING PAGES (NO NEW PAGE CREATION)
+    ------------------------------------------------ */
+      const pages = await report.getPages();
 
-      visualsToCreate.forEach((v) => {
-        visualMap.set(v.title, v);
-      });
+      /* ------------------------------------------------
+       CREATE LOOKUP MAP
+    ------------------------------------------------ */
+      const visualMap = new Map();
+      visuals.forEach((v: any) => visualMap.set(v.title, v));
 
-      /* ----------------------------------------------------------
-       🧠 GET EXISTING PAGES
-    ---------------------------------------------------------- */
-      let pages = await report.getPages();
-
-      /* ----------------------------------------------------------
-       🧠 CREATE PAGES PER DASHBOARD
-    ---------------------------------------------------------- */
+      /* ------------------------------------------------
+       LOOP DASHBOARDS → MAP TO PAGE INDEX
+    ------------------------------------------------ */
       for (let i = 0; i < dashboards.length; i++) {
         const dashboard = dashboards[i];
-        const pageName = dashboard.dashboardName || `Page ${i + 1}`;
+        const page = pages[i]; // IMPORTANT FIX
 
-        setStatus(`Preparing page: ${pageName}`);
+        if (!page) continue;
 
-        let page = pages.find((p: any) => p.displayName === pageName);
-
-        // Create page if not exists
-        if (!page) {
-          page = await report.addPage(pageName);
-          pages = await report.getPages();
-        }
-
-        // Activate page
         await page.setActive();
-        await sleep(500);
+        await sleep(400);
 
-        /* ------------------------------------------------------
-         🧹 CLEAR EXISTING VISUALS
-      ------------------------------------------------------ */
-        try {
-          const existing = await page.getVisuals();
-          for (const v of existing) {
-            await page.deleteVisual(v.name);
-          }
-        } catch (e) {
-          console.warn("Clear page failed", e);
+        /* ---------------- CLEAR PAGE ---------------- */
+        const existing = await page.getVisuals();
+        for (const v of existing) {
+          await page.deleteVisual(v.name);
         }
 
-        /* ------------------------------------------------------
-         📊 CREATE VISUALS FOR THIS DASHBOARD
-      ------------------------------------------------------ */
-        for (const worksheet of dashboard.worksheets) {
-          const v = visualMap.get(worksheet);
+        /* ---------------- ADD VISUALS ---------------- */
+        for (const sheetName of dashboard.worksheets) {
+          const v = visualMap.get(sheetName);
           if (!v) continue;
 
-          setStatus(`Creating ${v.title} on ${pageName}`);
-
           try {
-            const { visual } = await page.createVisual(v.visualType as string, {
+            const { visual } = await page.createVisual(v.visualType, {
               x: v.layout.x,
               y: v.layout.y,
               width: v.layout.width,
               height: v.layout.height,
-              displayState: { mode: models.VisualContainerDisplayMode.Visible },
             });
 
-            // Title
-            if (v.title) {
-              await visual.setProperty({ objectName: "title", propertyName: "text" }, { value: v.title });
-              await visual.setProperty({ objectName: "title", propertyName: "visible" }, { value: true });
-            }
+            /* -------- SAFE TITLE SETTING (FIXED) -------- */
+            await visual.updateSettings({
+              title: {
+                text: v.title,
+                visible: true,
+              },
+            });
 
-            await sleep(200);
-
-            /* -----------------------------------------------
-             🧠 HANDLE MULTI / SINGLE BINDINGS
-          ----------------------------------------------- */
-            for (const [role, binding] of Object.entries(v.bindings)) {
+            /* -------- DATA BINDINGS -------- */
+            for (const role of Object.keys(v.bindings)) {
               const roleName = mapRoleName(v.visualType, role);
+              const bindings = Array.isArray(v.bindings[role]) ? v.bindings[role] : [v.bindings[role]];
 
-              const bindArray = Array.isArray(binding) ? binding : [binding];
-
-              for (const b of bindArray) {
-                const col = cleanColumnName(b.column);
-
-                try {
-                  await visual.addDataField(roleName, {
-                    $schema: "http://powerbi.com/product/schema#column",
-                    table: b.table,
-                    column: col,
-                  });
-                } catch (e) {
-                  console.warn("Binding failed:", b);
-                }
+              for (const b of bindings) {
+                await visual.addDataField(roleName, {
+                  $schema: "http://powerbi.com/product/schema#column",
+                  table: b.table,
+                  column: cleanColumnName(b.column),
+                });
               }
             }
-          } catch (e) {
-            console.error("Visual creation failed:", e);
+          } catch (err) {
+            console.error("Visual creation failed:", err);
           }
         }
       }
 
       await report.save();
-      setStatus("Visuals generated successfully!");
+      setStatus("Dashboards mapped successfully!");
       setStatusType("success");
     } catch (err: any) {
-      console.error("❌ Critical Error:", err);
       setStatus("Error: " + err.message);
       setStatusType("error");
-    } finally {
-      console.groupEnd();
     }
   }
 
