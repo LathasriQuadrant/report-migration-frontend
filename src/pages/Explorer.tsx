@@ -1143,7 +1143,7 @@ import { Loader2 } from "lucide-react";
 
 const T_BLUE = "#1F77B4";
 const T_ORANGE = "#E8762B";
-const ITEMS_PER_PAGE = 12;
+const ITEMS_PER_PAGE = 8;
 
 const sourceNames: Record<string, string> = {
   tableau: "Tableau",
@@ -1157,6 +1157,18 @@ interface WorkbookItem {
   name: string;
   projectName: string;
 }
+
+// Soft distinct background colors cycled per card for visual variety
+const CARD_ACCENTS = [
+  { bg: "#EFF6FF", icon: "#3B82F6", text: "#1D4ED8" },
+  { bg: "#FFF7ED", icon: "#F97316", text: "#C2410C" },
+  { bg: "#F0FDF4", icon: "#22C55E", text: "#15803D" },
+  { bg: "#FDF4FF", icon: "#A855F7", text: "#7E22CE" },
+  { bg: "#FFF1F2", icon: "#F43F5E", text: "#BE123C" },
+  { bg: "#F0F9FF", icon: "#0EA5E9", text: "#0369A1" },
+  { bg: "#FEFCE8", icon: "#EAB308", text: "#A16207" },
+  { bg: "#F0FDFA", icon: "#14B8A6", text: "#0F766E" },
+];
 
 const Explorer = () => {
   const { sourceId } = useParams<{ sourceId: string }>();
@@ -1172,6 +1184,7 @@ const Explorer = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const sourceName = sourceNames[sourceId || ""] || "Unknown";
   const isTableau = sourceId === "tableau";
@@ -1325,346 +1338,370 @@ const Explorer = () => {
       w.projectName.toLowerCase().includes(searchQuery.toLowerCase()),
   );
   const totalPages = Math.max(1, Math.ceil(filteredWorkbooks.length / ITEMS_PER_PAGE));
-  const paginatedWorkbooks = filteredWorkbooks.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedWorkbooks = filteredWorkbooks.slice((safePage - 1) * ITEMS_PER_PAGE, safePage * ITEMS_PER_PAGE);
 
   const getPageNumbers = (): (number | "...")[] => {
     if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
     const pages: (number | "...")[] = [1];
-    if (currentPage > 3) pages.push("...");
-    for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) pages.push(i);
-    if (currentPage < totalPages - 2) pages.push("...");
+    if (safePage > 3) pages.push("...");
+    for (let i = Math.max(2, safePage - 1); i <= Math.min(totalPages - 1, safePage + 1); i++) pages.push(i);
+    if (safePage < totalPages - 2) pages.push("...");
     pages.push(totalPages);
     return pages;
   };
 
+  const PaginationBar = () => (
+    <div className="flex items-center gap-1">
+      <button
+        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+        disabled={safePage === 1}
+        className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-white/60 hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+      >
+        <ChevronLeft className="w-4 h-4" />
+      </button>
+
+      {getPageNumbers().map((page, i) =>
+        page === "..." ? (
+          <span
+            key={`ellipsis-${i}`}
+            className="h-8 w-8 flex items-center justify-center text-xs text-muted-foreground"
+          >
+            …
+          </span>
+        ) : (
+          <button
+            key={`page-${page}`}
+            onClick={() => setCurrentPage(page as number)}
+            className="h-8 min-w-[32px] px-2 flex items-center justify-center rounded-lg text-xs font-semibold transition-all"
+            style={
+              safePage === page
+                ? {
+                    background: `linear-gradient(135deg, ${T_BLUE}, ${T_ORANGE})`,
+                    color: "#fff",
+                    boxShadow: `0 2px 8px ${T_BLUE}40`,
+                  }
+                : { color: "hsl(var(--muted-foreground))" }
+            }
+            onMouseEnter={(e) => {
+              if (safePage !== page) (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.6)";
+            }}
+            onMouseLeave={(e) => {
+              if (safePage !== page) (e.currentTarget as HTMLElement).style.backgroundColor = "";
+            }}
+          >
+            {page}
+          </button>
+        ),
+      )}
+
+      <button
+        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+        disabled={safePage === totalPages}
+        className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-white/60 hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+      >
+        <ChevronRight className="w-4 h-4" />
+      </button>
+
+      <span className="ml-1 text-xs text-muted-foreground">
+        {safePage} / {totalPages}
+      </span>
+    </div>
+  );
+
   return (
     <AppLayout>
-      <div className="max-w-7xl mx-auto h-full flex flex-col gap-2">
-        {/* Tableau gradient banner */}
-        {isTableau && (
-          <div
-            className="rounded-xl px-4 py-2.5 flex items-center justify-between flex-shrink-0"
-            style={{ background: `linear-gradient(135deg, ${T_BLUE} 0%, #2196c4 45%, ${T_ORANGE} 100%)` }}
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="flex items-end gap-0.5 h-5">
-                {[10, 16, 12, 20, 8].map((h, i) => (
-                  <div
-                    key={i}
-                    className="w-1.5 rounded-sm bg-white"
-                    style={{ height: h, opacity: i % 2 === 0 ? 0.6 : 1 }}
-                  />
-                ))}
+      {/* Page background */}
+      <div
+        className="min-h-full"
+        style={{
+          background: "linear-gradient(160deg, #EEF4FB 0%, #F5F0FA 50%, #FEF3E8 100%)",
+        }}
+      >
+        <div className="max-w-7xl mx-auto h-full flex flex-col gap-3 p-4">
+          {/* Tableau gradient banner */}
+          {isTableau && (
+            <div
+              className="rounded-2xl px-5 py-3 flex items-center justify-between flex-shrink-0 shadow-md"
+              style={{ background: `linear-gradient(135deg, ${T_BLUE} 0%, #2196c4 45%, ${T_ORANGE} 100%)` }}
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex items-end gap-0.5 h-5">
+                  {[10, 16, 12, 20, 8].map((h, i) => (
+                    <div
+                      key={i}
+                      className="w-1.5 rounded-sm bg-white"
+                      style={{ height: h, opacity: i % 2 === 0 ? 0.6 : 1 }}
+                    />
+                  ))}
+                </div>
+                <span className="text-white font-bold text-sm tracking-wide">Tableau Explorer</span>
               </div>
-              <span className="text-white font-semibold text-sm tracking-wide">Tableau Explorer</span>
-            </div>
-            <span className="text-white/70 text-xs">
-              {workbooks.length} workbook{workbooks.length !== 1 ? "s" : ""} loaded
-            </span>
-          </div>
-        )}
-
-        {/* ── Top bar: back + breadcrumb | search | view toggle + refresh ── */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate("/")}>
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              <button onClick={() => navigate("/")} className="hover:text-foreground transition-colors">
-                Dashboard
-              </button>
-              <ChevronRight className="w-3 h-3" />
-              <span className="font-semibold" style={{ color: T_BLUE }}>
-                {sourceName} Explorer
+              <span className="text-white/70 text-xs">
+                {workbooks.length} workbook{workbooks.length !== 1 ? "s" : ""} loaded
               </span>
             </div>
-          </div>
+          )}
 
-          <div className="relative flex-1 mx-2">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-            <Input
-              placeholder={
-                viewMode === "grid" ? "Search workbooks or projects..." : "Search reports, dashboards, workbooks..."
-              }
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 h-8 text-sm w-full"
-            />
-          </div>
-
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            <div className="flex items-center bg-muted rounded-lg p-0.5 gap-0.5">
-              <button
-                onClick={() => setViewMode("grid")}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
-                  viewMode === "grid"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <LayoutGrid className="w-3.5 h-3.5" /> Grid
-              </button>
-              <button
-                onClick={() => setViewMode("tree")}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
-                  viewMode === "tree"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <List className="w-3.5 h-3.5" /> Tree
-              </button>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              className="h-8 text-xs gap-1.5"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-          </div>
-        </div>
-
-        {/* ================= GRID VIEW ================= */}
-        {viewMode === "grid" && (
-          <div className="bg-card rounded-xl border border-border enterprise-shadow flex-1 flex flex-col min-h-0">
-            {/* Scrollable grid area */}
-            <div className="p-4 flex-1 overflow-y-auto">
-              {filteredWorkbooks.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-3">
-                  <div
-                    className="w-14 h-14 rounded-2xl flex items-center justify-center"
-                    style={{ backgroundColor: `${T_BLUE}10` }}
-                  >
-                    <BookOpen className="w-7 h-7" style={{ color: T_BLUE }} />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-sm font-medium">No workbooks found</p>
-                    {searchQuery && <p className="text-xs opacity-50 mt-0.5">Try a different search term</p>}
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                  {paginatedWorkbooks.map((wb) => {
-                    const isSelected = selectedWorkbook?.id === wb.id;
-                    return (
-                      <button
-                        key={wb.id}
-                        onClick={() => setSelectedWorkbook(isSelected ? null : wb)}
-                        className="group relative flex flex-col rounded-xl text-left transition-all duration-200 overflow-hidden"
-                        style={{
-                          background: isSelected
-                            ? `linear-gradient(145deg, ${T_BLUE}18 0%, ${T_BLUE}08 100%)`
-                            : "hsl(var(--muted)/0.4)",
-                          boxShadow: isSelected
-                            ? `0 0 0 2px ${T_BLUE}, 0 4px 16px ${T_BLUE}20`
-                            : "0 1px 3px rgba(0,0,0,0.04)",
-                        }}
-                        onMouseEnter={(e) => {
-                          if (!isSelected) {
-                            (e.currentTarget as HTMLElement).style.background =
-                              `linear-gradient(145deg, ${T_BLUE}10 0%, ${T_ORANGE}06 100%)`;
-                            (e.currentTarget as HTMLElement).style.boxShadow =
-                              `0 0 0 1px ${T_BLUE}40, 0 4px 12px rgba(0,0,0,0.08)`;
-                            (e.currentTarget as HTMLElement).style.transform = "translateY(-1px)";
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (!isSelected) {
-                            (e.currentTarget as HTMLElement).style.background = "hsl(var(--muted)/0.4)";
-                            (e.currentTarget as HTMLElement).style.boxShadow = "0 1px 3px rgba(0,0,0,0.04)";
-                            (e.currentTarget as HTMLElement).style.transform = "";
-                          }
-                        }}
-                      >
-                        {/* Colored top accent strip */}
-                        <div
-                          className="h-1 w-full flex-shrink-0 transition-all duration-200"
-                          style={{
-                            background: isSelected ? `linear-gradient(90deg, ${T_BLUE}, ${T_ORANGE})` : "transparent",
-                          }}
-                        />
-
-                        <div className="p-3 flex flex-col gap-2 flex-1">
-                          {/* Icon row */}
-                          <div className="flex items-start justify-between">
-                            <div
-                              className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-200"
-                              style={
-                                isSelected
-                                  ? { background: `linear-gradient(135deg, ${T_BLUE}30, ${T_BLUE}15)`, color: T_BLUE }
-                                  : { backgroundColor: "hsl(var(--background))", color: "hsl(var(--muted-foreground))" }
-                              }
-                            >
-                              <BookOpen className="w-4 h-4" />
-                            </div>
-
-                            {isSelected && <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: T_BLUE }} />}
-                          </div>
-
-                          {/* Name */}
-                          <p
-                            className="font-semibold text-sm leading-snug line-clamp-2 transition-colors duration-200"
-                            style={isSelected ? { color: T_BLUE } : {}}
-                          >
-                            {wb.name}
-                          </p>
-
-                          {/* Project */}
-                          <div className="flex items-center gap-1 mt-auto">
-                            <FolderOpen className="w-3 h-3 flex-shrink-0 opacity-40" />
-                            <span className="text-xs text-muted-foreground truncate opacity-70">
-                              {wb.projectName || "—"}
-                            </span>
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* ── Footer: pagination LEFT · migrate RIGHT ── */}
-            <div className="px-4 py-2.5 border-t border-border flex items-center justify-between flex-shrink-0 gap-4">
-              {/* Pagination */}
-              {totalPages > 1 ? (
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronLeft className="w-3.5 h-3.5" />
-                  </button>
-
-                  {getPageNumbers().map((page, i) =>
-                    page === "..." ? (
-                      <span
-                        key={`e-${i}`}
-                        className="h-7 w-6 flex items-center justify-center text-xs text-muted-foreground"
-                      >
-                        …
-                      </span>
-                    ) : (
-                      <button
-                        key={page}
-                        onClick={() => setCurrentPage(page as number)}
-                        className="h-7 min-w-[28px] px-1.5 rounded-md text-xs font-medium transition-all"
-                        style={
-                          currentPage === page
-                            ? { background: `linear-gradient(135deg, ${T_BLUE}, ${T_ORANGE})`, color: "#fff" }
-                            : { color: "hsl(var(--foreground))" }
-                        }
-                        onMouseEnter={(e) => {
-                          if (currentPage !== page)
-                            (e.currentTarget as HTMLElement).style.backgroundColor = `${T_BLUE}12`;
-                        }}
-                        onMouseLeave={(e) => {
-                          if (currentPage !== page) (e.currentTarget as HTMLElement).style.backgroundColor = "";
-                        }}
-                      >
-                        {page}
-                      </button>
-                    ),
-                  )}
-
-                  <button
-                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
-                    className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ) : (
-                <div /> /* spacer so migrate stays right */
-              )}
-
-              {/* Migrate button */}
+          {/* ── Top bar ── */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex items-center gap-2 flex-shrink-0">
               <Button
-                size="sm"
-                onClick={handleMigrateWorkbook}
-                disabled={!selectedWorkbook || isMigrating}
-                className="h-8 text-xs gap-1.5 text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed border-0 flex-shrink-0"
-                style={{
-                  background:
-                    !selectedWorkbook || isMigrating
-                      ? undefined
-                      : `linear-gradient(135deg, ${T_BLUE} 0%, ${T_ORANGE} 100%)`,
-                }}
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 bg-white/70 hover:bg-white shadow-sm"
+                onClick={() => navigate("/")}
               >
-                {isMigrating ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    Preparing...
-                  </>
-                ) : (
-                  <>
-                    <Zap className="w-3.5 h-3.5" />
-                    Migrate to Power BI
-                  </>
-                )}
+                <ArrowLeft className="w-4 h-4" />
               </Button>
-            </div>
-          </div>
-        )}
-
-        {/* ================= TREE VIEW ================= */}
-        {viewMode === "tree" && (
-          <div className="bg-card rounded-xl border border-border enterprise-shadow flex-1 flex flex-col min-h-0">
-            {selectedNode && (
-              <div className="px-3 py-1.5 border-b border-border flex-shrink-0 flex items-center gap-1.5">
-                <span className="text-xs text-muted-foreground">Selected:</span>
-                <span
-                  className="flex items-center gap-1 text-xs font-medium border rounded-full px-2 py-0.5"
-                  style={{ color: T_ORANGE, borderColor: `${T_ORANGE}40`, backgroundColor: `${T_ORANGE}0a` }}
-                >
-                  <Zap className="w-3 h-3" />
-                  {selectedNode.name}
+              <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <button onClick={() => navigate("/")} className="hover:text-foreground transition-colors">
+                  Dashboard
+                </button>
+                <ChevronRight className="w-3 h-3" />
+                <span className="font-semibold" style={{ color: T_BLUE }}>
+                  {sourceName} Explorer
                 </span>
               </div>
-            )}
-
-            <div className="flex-1 overflow-y-auto">
-              <TreeView nodes={treeData} selectedId={selectedNode?.id || null} onSelect={setSelectedNode} />
             </div>
 
-            <div className="px-3 py-2 border-t border-border flex items-center justify-between flex-shrink-0">
-              <span className="text-xs text-muted-foreground">
-                {selectedNode ? `"${selectedNode.name}" ready to migrate` : "Select a node from the tree"}
-              </span>
+            {/* Search — fills middle */}
+            <div className="relative flex-1 mx-2">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+              <Input
+                placeholder={
+                  viewMode === "grid" ? "Search workbooks or projects..." : "Search reports, dashboards, workbooks..."
+                }
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8 h-9 text-sm w-full bg-white/80 backdrop-blur border-white/60 shadow-sm focus:bg-white"
+              />
+            </div>
+
+            {/* View toggle + refresh */}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex items-center bg-white/70 rounded-lg p-0.5 gap-0.5 shadow-sm">
+                <button
+                  onClick={() => setViewMode("grid")}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+                    viewMode === "grid"
+                      ? "bg-white text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" /> Grid
+                </button>
+                <button
+                  onClick={() => setViewMode("tree")}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+                    viewMode === "tree"
+                      ? "bg-white text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <List className="w-3.5 h-3.5" /> Tree
+                </button>
+              </div>
               <Button
+                variant="outline"
                 size="sm"
-                onClick={handleMigrateNode}
-                disabled={!selectedNode || isMigrating}
-                className="h-8 text-xs gap-1.5 text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed border-0"
-                style={{
-                  background:
-                    !selectedNode || isMigrating
-                      ? undefined
-                      : `linear-gradient(135deg, ${T_BLUE} 0%, ${T_ORANGE} 100%)`,
-                }}
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="h-9 text-xs gap-1.5 bg-white/70 border-white/60 hover:bg-white shadow-sm"
               >
-                {isMigrating ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    Preparing...
-                  </>
-                ) : (
-                  <>
-                    <Zap className="w-3.5 h-3.5" />
-                    Migrate to Power BI
-                  </>
-                )}
+                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+                Refresh
               </Button>
             </div>
           </div>
-        )}
+
+          {/* ================= GRID VIEW ================= */}
+          {viewMode === "grid" && (
+            <div className="bg-white/60 backdrop-blur-sm rounded-2xl shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
+              {/* Scrollable grid */}
+              <div className="p-4 flex-1 overflow-y-auto">
+                {filteredWorkbooks.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-3">
+                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-blue-50">
+                      <BookOpen className="w-7 h-7" style={{ color: T_BLUE }} />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-medium">No workbooks found</p>
+                      {searchQuery && <p className="text-xs opacity-50 mt-0.5">Try a different search term</p>}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {paginatedWorkbooks.map((wb, idx) => {
+                      const isSelected = selectedWorkbook?.id === wb.id;
+                      const isHovered = hoveredId === wb.id;
+                      const accent = CARD_ACCENTS[idx % CARD_ACCENTS.length];
+
+                      return (
+                        <button
+                          key={wb.id}
+                          onClick={() => setSelectedWorkbook(isSelected ? null : wb)}
+                          onMouseEnter={() => setHoveredId(wb.id)}
+                          onMouseLeave={() => setHoveredId(null)}
+                          className="relative flex flex-col rounded-xl text-left transition-all duration-200 overflow-hidden"
+                          style={{
+                            backgroundColor: isSelected ? accent.bg : isHovered ? accent.bg : "#fff",
+                            boxShadow: isSelected
+                              ? `0 0 0 2.5px ${accent.icon}, 0 6px 20px ${accent.icon}25`
+                              : isHovered
+                                ? `0 4px 16px rgba(0,0,0,0.10)`
+                                : "0 1px 4px rgba(0,0,0,0.06)",
+                            transform: isHovered && !isSelected ? "translateY(-2px)" : "none",
+                          }}
+                        >
+                          {/* Colored left sidebar stripe */}
+                          <div
+                            className="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl transition-all duration-200"
+                            style={{
+                              backgroundColor: isSelected || isHovered ? accent.icon : "transparent",
+                            }}
+                          />
+
+                          <div className="pl-4 pr-3 py-3 flex flex-col gap-2.5 flex-1">
+                            {/* Icon + check row */}
+                            <div className="flex items-center justify-between">
+                              <div
+                                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-all duration-200"
+                                style={{
+                                  backgroundColor: isSelected || isHovered ? `${accent.icon}20` : "#F3F4F6",
+                                  color: isSelected || isHovered ? accent.icon : "#9CA3AF",
+                                }}
+                              >
+                                <BookOpen className="w-4 h-4" />
+                              </div>
+                              {isSelected && (
+                                <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: accent.icon }} />
+                              )}
+                            </div>
+
+                            {/* Workbook name */}
+                            <p
+                              className="font-semibold text-sm leading-snug line-clamp-2 transition-colors duration-200"
+                              style={{ color: isSelected ? accent.text : isHovered ? accent.text : "#111827" }}
+                            >
+                              {wb.name}
+                            </p>
+
+                            {/* Project name */}
+                            <div className="flex items-center gap-1.5 mt-auto">
+                              <FolderOpen
+                                className="w-3 h-3 flex-shrink-0"
+                                style={{ color: isSelected || isHovered ? accent.icon : "#9CA3AF" }}
+                              />
+                              <span
+                                className="text-xs truncate"
+                                style={{ color: isSelected || isHovered ? accent.icon : "#6B7280" }}
+                              >
+                                {wb.projectName || "—"}
+                              </span>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer: pagination + migrate */}
+              <div
+                className="px-4 py-3 flex items-center justify-between flex-shrink-0"
+                style={{ borderTop: "1px solid rgba(0,0,0,0.06)", backgroundColor: "rgba(255,255,255,0.7)" }}
+              >
+                <PaginationBar />
+                <Button
+                  size="sm"
+                  onClick={handleMigrateWorkbook}
+                  disabled={!selectedWorkbook || isMigrating}
+                  className="h-9 px-4 text-xs gap-1.5 text-white font-semibold disabled:opacity-40 disabled:cursor-not-allowed border-0 rounded-lg flex-shrink-0 shadow-md"
+                  style={{
+                    background:
+                      !selectedWorkbook || isMigrating
+                        ? "#D1D5DB"
+                        : `linear-gradient(135deg, ${T_BLUE} 0%, ${T_ORANGE} 100%)`,
+                    boxShadow: selectedWorkbook && !isMigrating ? `0 4px 14px ${T_BLUE}40` : "none",
+                  }}
+                >
+                  {isMigrating ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Preparing...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="w-3.5 h-3.5" />
+                      Migrate to Power BI
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* ================= TREE VIEW ================= */}
+          {viewMode === "tree" && (
+            <div className="bg-white/60 backdrop-blur-sm rounded-2xl shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
+              {selectedNode && (
+                <div
+                  className="px-4 py-2 flex items-center gap-1.5 flex-shrink-0"
+                  style={{ borderBottom: "1px solid rgba(0,0,0,0.06)" }}
+                >
+                  <span className="text-xs text-muted-foreground">Selected:</span>
+                  <span
+                    className="flex items-center gap-1 text-xs font-medium border rounded-full px-2 py-0.5"
+                    style={{ color: T_ORANGE, borderColor: `${T_ORANGE}40`, backgroundColor: `${T_ORANGE}0a` }}
+                  >
+                    <Zap className="w-3 h-3" />
+                    {selectedNode.name}
+                  </span>
+                </div>
+              )}
+
+              <div className="flex-1 overflow-y-auto">
+                <TreeView nodes={treeData} selectedId={selectedNode?.id || null} onSelect={setSelectedNode} />
+              </div>
+
+              <div
+                className="px-4 py-3 flex items-center justify-between flex-shrink-0"
+                style={{ borderTop: "1px solid rgba(0,0,0,0.06)", backgroundColor: "rgba(255,255,255,0.7)" }}
+              >
+                <span className="text-xs text-muted-foreground">
+                  {selectedNode ? `"${selectedNode.name}" ready to migrate` : "Select a node from the tree"}
+                </span>
+                <Button
+                  size="sm"
+                  onClick={handleMigrateNode}
+                  disabled={!selectedNode || isMigrating}
+                  className="h-9 px-4 text-xs gap-1.5 text-white font-semibold disabled:opacity-40 disabled:cursor-not-allowed border-0 rounded-lg shadow-md"
+                  style={{
+                    background:
+                      !selectedNode || isMigrating
+                        ? "#D1D5DB"
+                        : `linear-gradient(135deg, ${T_BLUE} 0%, ${T_ORANGE} 100%)`,
+                    boxShadow: selectedNode && !isMigrating ? `0 4px 14px ${T_BLUE}40` : "none",
+                  }}
+                >
+                  {isMigrating ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Preparing...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="w-3.5 h-3.5" />
+                      Migrate to Power BI
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </AppLayout>
   );
