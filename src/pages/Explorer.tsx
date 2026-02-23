@@ -538,6 +538,7 @@ import {
   Zap,
   FolderOpen,
   Eye,
+  ChevronLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -552,6 +553,8 @@ import { Loader2 } from "lucide-react";
 // Tableau official brand colors
 const T_BLUE = "#1F77B4";
 const T_ORANGE = "#E8762B";
+
+const ITEMS_PER_PAGE = 12;
 
 const sourceNames: Record<string, string> = {
   tableau: "Tableau",
@@ -570,11 +573,6 @@ interface WorkbookItem {
 const Explorer = () => {
   const { sourceId } = useParams<{ sourceId: string }>();
   const navigate = useNavigate();
-
-  // ⚠️ To get toasts on top-right, update your <Toaster /> in App.tsx or main layout:
-  // import { Toaster } from "@/components/ui/toaster";
-  // <Toaster toastOptions={{ className: "top-4 right-4" }} />
-  // OR if using sonner: <Toaster position="top-right" />
   const { toast } = useToast();
 
   const [selectedNode, setSelectedNode] = useState<TreeNode | null>(null);
@@ -586,6 +584,7 @@ const Explorer = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const sourceName = sourceNames[sourceId || ""] || "Unknown";
   const isTableau = sourceId === "tableau";
@@ -614,6 +613,11 @@ const Explorer = () => {
       }
     }
   }, [sourceId]);
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
 
   const handleRefresh = async () => {
     if (!isTableau) return;
@@ -731,11 +735,28 @@ const Explorer = () => {
     }
   };
 
+  // Pagination logic
   const filteredWorkbooks = workbooks.filter(
     (w) =>
       w.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       w.projectName.toLowerCase().includes(searchQuery.toLowerCase()),
   );
+  const totalPages = Math.max(1, Math.ceil(filteredWorkbooks.length / ITEMS_PER_PAGE));
+  const paginatedWorkbooks = filteredWorkbooks.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+  const getPageNumbers = () => {
+    const pages: (number | "...")[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (currentPage > 3) pages.push("...");
+      for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) pages.push(i);
+      if (currentPage < totalPages - 2) pages.push("...");
+      pages.push(totalPages);
+    }
+    return pages;
+  };
 
   return (
     <AppLayout>
@@ -747,7 +768,6 @@ const Explorer = () => {
             style={{ background: `linear-gradient(135deg, ${T_BLUE} 0%, #2196c4 45%, ${T_ORANGE} 100%)` }}
           >
             <div className="flex items-center gap-2.5">
-              {/* Tableau bar-chart logo mark */}
               <div className="flex items-end gap-0.5 h-5">
                 {[10, 16, 12, 20, 8].map((h, i) => (
                   <div
@@ -765,9 +785,10 @@ const Explorer = () => {
           </div>
         )}
 
-        {/* Header row */}
-        <div className="flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-2">
+        {/* ── Top bar: back + breadcrumb | search | view toggle + refresh ── */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Left: back + breadcrumb */}
+          <div className="flex items-center gap-2 flex-shrink-0">
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate("/")}>
               <ArrowLeft className="w-4 h-4" />
             </Button>
@@ -782,8 +803,21 @@ const Explorer = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            {/* View mode pill */}
+          {/* Center: search — grows to fill space */}
+          <div className="relative flex-1 mx-2">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            <Input
+              placeholder={
+                viewMode === "grid" ? "Search workbooks or projects..." : "Search reports, dashboards, workbooks..."
+              }
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-8 h-8 text-sm w-full"
+            />
+          </div>
+
+          {/* Right: view toggle + refresh */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
             <div className="flex items-center bg-muted rounded-lg p-0.5 gap-0.5">
               <button
                 onClick={() => setViewMode("grid")}
@@ -808,7 +842,6 @@ const Explorer = () => {
                 Tree
               </button>
             </div>
-
             <Button
               variant="outline"
               size="sm"
@@ -825,29 +858,23 @@ const Explorer = () => {
         {/* ================= GRID VIEW ================= */}
         {viewMode === "grid" && (
           <div className="bg-card rounded-xl border border-border enterprise-shadow flex-1 flex flex-col min-h-0">
-            {/* Search bar — inline with count + selection status */}
-            <div className="px-3 py-2 border-b border-border flex-shrink-0 flex items-center gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                <Input
-                  placeholder="Search workbooks or projects..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-8 h-8 text-sm"
-                />
-              </div>
-
-              <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
+            {/* Sub-bar: result count + selected badge */}
+            <div className="px-3 py-2 border-b border-border flex-shrink-0 flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">
                 <span className="font-semibold" style={{ color: T_BLUE }}>
                   {filteredWorkbooks.length}
                 </span>{" "}
                 {filteredWorkbooks.length === 1 ? "workbook" : "workbooks"}
                 {searchQuery && <span className="opacity-60"> found</span>}
+                {totalPages > 1 && (
+                  <span className="ml-1 opacity-60">
+                    · page {currentPage} of {totalPages}
+                  </span>
+                )}
               </span>
-
               {selectedWorkbook && (
                 <span
-                  className="flex items-center gap-1 text-xs font-medium whitespace-nowrap flex-shrink-0 border rounded-full px-2 py-0.5"
+                  className="flex items-center gap-1 text-xs font-medium border rounded-full px-2 py-0.5"
                   style={{ color: T_ORANGE, borderColor: `${T_ORANGE}40`, backgroundColor: `${T_ORANGE}0a` }}
                 >
                   <Zap className="w-3 h-3" />
@@ -856,16 +883,17 @@ const Explorer = () => {
               )}
             </div>
 
-            {/* Workbook grid */}
+            {/* Grid */}
             <div className="p-3 flex-1 overflow-y-auto">
               {filteredWorkbooks.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-32 text-muted-foreground gap-2">
-                  <BookOpen className="w-8 h-8 opacity-30" />
-                  <p className="text-sm">No workbooks found</p>
+                <div className="flex flex-col items-center justify-center h-40 text-muted-foreground gap-2">
+                  <BookOpen className="w-10 h-10 opacity-20" />
+                  <p className="text-sm font-medium">No workbooks found</p>
+                  {searchQuery && <p className="text-xs opacity-60">Try a different search term</p>}
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-                  {filteredWorkbooks.map((wb) => {
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+                  {paginatedWorkbooks.map((wb) => {
                     const isSelected = selectedWorkbook?.id === wb.id;
                     const isHovered = hoveredId === wb.id;
                     return (
@@ -874,53 +902,58 @@ const Explorer = () => {
                         onClick={() => setSelectedWorkbook(isSelected ? null : wb)}
                         onMouseEnter={() => setHoveredId(wb.id)}
                         onMouseLeave={() => setHoveredId(null)}
-                        className="group relative p-3 rounded-lg border text-left transition-all duration-150"
+                        className="relative flex flex-col p-3 rounded-lg border text-left transition-all duration-150 min-h-[100px]"
                         style={
                           isSelected
                             ? {
                                 borderColor: T_BLUE,
                                 backgroundColor: `${T_BLUE}08`,
-                                boxShadow: `0 0 0 1px ${T_BLUE}30`,
+                                boxShadow: `0 0 0 1.5px ${T_BLUE}40`,
                               }
                             : isHovered
-                              ? { borderColor: `${T_BLUE}50`, backgroundColor: `${T_BLUE}04` }
-                              : { borderColor: "" }
+                              ? {
+                                  borderColor: `${T_BLUE}60`,
+                                  backgroundColor: `${T_BLUE}04`,
+                                  boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+                                }
+                              : {}
                         }
                       >
-                        {/* Selection indicator dot */}
+                        {/* Selected dot */}
                         {isSelected && (
                           <span
-                            className="absolute top-2 right-2 w-2 h-2 rounded-full"
+                            className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full ring-2 ring-white"
                             style={{ backgroundColor: T_ORANGE }}
                           />
                         )}
 
-                        {/* Icon container */}
-                        <div
-                          className="w-8 h-8 rounded-md flex items-center justify-center mb-2 transition-colors"
-                          style={
-                            isSelected
-                              ? { backgroundColor: `${T_BLUE}18`, color: T_BLUE }
-                              : isHovered
-                                ? { backgroundColor: `${T_BLUE}10`, color: T_BLUE }
-                                : { backgroundColor: "var(--muted)", color: "var(--muted-foreground)" }
-                          }
-                        >
-                          <BookOpen className="w-4 h-4" />
+                        {/* Icon + name row */}
+                        <div className="flex items-start gap-2 mb-2">
+                          <div
+                            className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors"
+                            style={
+                              isSelected
+                                ? { backgroundColor: `${T_BLUE}20`, color: T_BLUE }
+                                : isHovered
+                                  ? { backgroundColor: `${T_BLUE}14`, color: T_BLUE }
+                                  : { backgroundColor: "hsl(var(--muted))", color: "hsl(var(--muted-foreground))" }
+                            }
+                          >
+                            <BookOpen className="w-3.5 h-3.5" />
+                          </div>
+                          <p
+                            className="font-semibold text-sm leading-snug line-clamp-2 flex-1 pr-4 transition-colors"
+                            style={isSelected ? { color: T_BLUE } : isHovered ? { color: T_ORANGE } : {}}
+                          >
+                            {wb.name}
+                          </p>
                         </div>
 
-                        {/* Workbook name — Tableau blue when selected, orange on hover */}
-                        <p
-                          className="font-semibold text-sm leading-tight truncate pr-3 transition-colors"
-                          style={isSelected ? { color: T_BLUE } : isHovered ? { color: T_ORANGE } : {}}
-                        >
-                          {wb.name}
-                        </p>
-
-                        <div className="flex items-center justify-between mt-1.5 gap-1">
+                        {/* Footer meta */}
+                        <div className="mt-auto flex items-center justify-between gap-1">
                           <div className="flex items-center gap-1 min-w-0">
                             <FolderOpen className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                            <p className="text-xs text-muted-foreground truncate">{wb.projectName || "—"}</p>
+                            <span className="text-xs text-muted-foreground truncate">{wb.projectName || "—"}</span>
                           </div>
                           {wb.viewCount > 0 && (
                             <div className="flex items-center gap-0.5 flex-shrink-0">
@@ -936,16 +969,70 @@ const Explorer = () => {
               )}
             </div>
 
-            {/* Footer */}
-            <div className="px-3 py-2 border-t border-border flex items-center justify-between flex-shrink-0">
-              <span className="text-xs text-muted-foreground">
-                {selectedWorkbook ? `"${selectedWorkbook.name}" ready to migrate` : "Click a workbook to select it"}
-              </span>
+            {/* ── Footer: pagination LEFT + migrate RIGHT ── */}
+            <div className="px-3 py-2 border-t border-border flex items-center justify-between flex-shrink-0 gap-3">
+              {/* Pagination */}
+              {totalPages > 1 ? (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="h-7 w-7 flex items-center justify-center rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+
+                  {getPageNumbers().map((page, i) =>
+                    page === "..." ? (
+                      <span
+                        key={`ellipsis-${i}`}
+                        className="h-7 w-7 flex items-center justify-center text-xs text-muted-foreground"
+                      >
+                        …
+                      </span>
+                    ) : (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page as number)}
+                        className="h-7 min-w-[28px] px-1.5 flex items-center justify-center rounded-md text-xs font-medium transition-all"
+                        style={
+                          currentPage === page
+                            ? { backgroundColor: T_BLUE, color: "#fff", border: `1px solid ${T_BLUE}` }
+                            : { border: "1px solid hsl(var(--border))", color: "hsl(var(--foreground))" }
+                        }
+                        onMouseEnter={(e) => {
+                          if (currentPage !== page)
+                            (e.currentTarget as HTMLButtonElement).style.backgroundColor = `${T_BLUE}10`;
+                        }}
+                        onMouseLeave={(e) => {
+                          if (currentPage !== page) (e.currentTarget as HTMLButtonElement).style.backgroundColor = "";
+                        }}
+                      >
+                        {page}
+                      </button>
+                    ),
+                  )}
+
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="h-7 w-7 flex items-center justify-center rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <span className="text-xs text-muted-foreground">
+                  {selectedWorkbook ? `"${selectedWorkbook.name}" selected` : "Click a workbook to select it"}
+                </span>
+              )}
+
+              {/* Migrate button */}
               <Button
                 size="sm"
                 onClick={handleMigrateWorkbook}
                 disabled={!selectedWorkbook || isMigrating}
-                className="h-8 text-xs gap-1.5 text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed border-0"
+                className="h-8 text-xs gap-1.5 text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed border-0 flex-shrink-0"
                 style={{
                   background:
                     !selectedWorkbook || isMigrating
@@ -972,27 +1059,19 @@ const Explorer = () => {
         {/* ================= TREE VIEW ================= */}
         {viewMode === "tree" && (
           <div className="bg-card rounded-xl border border-border enterprise-shadow flex-1 flex flex-col min-h-0">
-            {/* Search + selected node inline */}
-            <div className="px-3 py-2 border-b border-border flex-shrink-0 flex items-center gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                <Input
-                  placeholder="Search reports, dashboards, workbooks..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-8 h-8 text-sm"
-                />
-              </div>
-              {selectedNode && (
+            {/* Selected badge */}
+            {selectedNode && (
+              <div className="px-3 py-1.5 border-b border-border flex-shrink-0 flex items-center gap-1.5">
+                <span className="text-xs text-muted-foreground">Selected:</span>
                 <span
-                  className="flex items-center gap-1 text-xs font-medium whitespace-nowrap flex-shrink-0 border rounded-full px-2 py-0.5"
+                  className="flex items-center gap-1 text-xs font-medium border rounded-full px-2 py-0.5"
                   style={{ color: T_ORANGE, borderColor: `${T_ORANGE}40`, backgroundColor: `${T_ORANGE}0a` }}
                 >
                   <Zap className="w-3 h-3" />
                   {selectedNode.name}
                 </span>
-              )}
-            </div>
+              </div>
+            )}
 
             <div className="flex-1 overflow-y-auto">
               <TreeView nodes={treeData} selectedId={selectedNode?.id || null} onSelect={setSelectedNode} />
