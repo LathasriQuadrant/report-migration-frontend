@@ -551,7 +551,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 
 // ReportFlow brand colors
-const PRIMARY = "#3A9AFF"; // ReportFlow blue
+const PRIMARY = "#2563EB"; // ReportFlow blue
 const PRIMARY_LIGHT = "#EFF4FF"; // soft blue tint for backgrounds
 const SECONDARY = "#FEFCE8"; // light yellow — hover background
 const SECONDARY_BORDER = "#FDE68A"; // yellow border accent on hover
@@ -589,7 +589,7 @@ const Explorer = () => {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const sourceName = sourceNames[sourceId || ""] || "Unknown";
-  const isTableau = sourceId === "tableau";
+  const isTableau = sourceId === "tableau"; // still used for refresh logic
 
   // ── Helpers ──────────────────────────────────────────────────────────
   const extractWorkbooks = (tree: TreeNode[]): WorkbookItem[] => {
@@ -835,33 +835,8 @@ const Explorer = () => {
   return (
     <AppLayout>
       {/* ── Page background: clean off-white with very subtle blue tint ── */}
-
       <div className="min-h-full" style={{ backgroundColor: "#F1F5FB" }}>
         <div className="max-w-7xl mx-auto h-full flex flex-col gap-3 p-4">
-          {/* ── Tableau banner ── */}
-          {isTableau && (
-            <div
-              className="rounded-2xl px-5 py-3 flex items-center justify-between flex-shrink-0"
-              style={{ backgroundColor: PRIMARY, boxShadow: `0 4px 16px ${PRIMARY}35` }}
-            >
-              <div className="flex items-center gap-3">
-                {/* Bar-chart logo mark */}
-                <div className="flex items-end gap-0.5 h-5">
-                  {[10, 16, 12, 20, 8].map((h, i) => (
-                    <div
-                      key={i}
-                      className="w-1.5 rounded-sm bg-white"
-                      style={{ height: h, opacity: i % 2 === 0 ? 0.55 : 1 }}
-                    />
-                  ))}
-                </div>
-                {/* <span className="text-white font-bold text-sm tracking-wide">Tableau Explorer</span> */}
-              </div>
-              {/* <span className="text-white/65 text-xs">
-                {workbooks.length} workbook{workbooks.length !== 1 ? "s" : ""} loaded
-              </span> */}
-            </div>
-          )}
           {/* ── Top bar: back · breadcrumb | search | toggle · refresh ── */}
           <div className="flex items-center gap-2 flex-shrink-0">
             {/* Back + breadcrumb */}
