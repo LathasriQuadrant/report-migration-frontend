@@ -20,7 +20,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Check Azure AD authentication status by calling the backend
   const checkAuth = async (): Promise<boolean> => {
     try {
-      const response = await fetch(`${BACKEND_BASE_URL}/workspaces`, {
+      const response = await fetch(`${BACKEND_BASE_URL}/api/workspaces`, {
         credentials: "include",
       });
 
