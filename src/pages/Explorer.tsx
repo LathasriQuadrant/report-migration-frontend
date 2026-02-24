@@ -670,7 +670,6 @@ const Explorer = () => {
     const filename = workbookName.replace(/\.twbx$/i, "");
     const parseRes = await fetch(`https://tomgenerator-b0e2byeyhmc5caht.eastus-01.azurewebsites.net/parse/${encodeURIComponent(filename)}`, {
       method: "POST",
-      headers: { accept: "application/json" },
     });
     if (!parseRes.ok) throw new Error("Failed to parse workbook");
     const parseData = await parseRes.json();
