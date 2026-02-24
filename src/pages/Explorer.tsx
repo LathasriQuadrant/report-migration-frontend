@@ -854,11 +854,11 @@ const Explorer = () => {
                     />
                   ))}
                 </div>
-                <span className="text-white font-bold text-sm tracking-wide">Tableau Explorer</span>
+                {/* <span className="text-white font-bold text-sm tracking-wide">Tableau Explorer</span> */}
               </div>
-              <span className="text-white/65 text-xs">
+              {/* <span className="text-white/65 text-xs">
                 {workbooks.length} workbook{workbooks.length !== 1 ? "s" : ""} loaded
-              </span>
+              </span> */}
             </div>
           )}
 
