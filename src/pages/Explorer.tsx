@@ -552,9 +552,9 @@ import { Loader2 } from "lucide-react";
 
 // ReportFlow brand colors
 const PRIMARY = "#2563EB"; // ReportFlow blue
-const PRIMARY_LIGHT = "#EFF4FF"; // soft blue tint for backgrounds
-const SECONDARY = "#FEFCE8"; // light yellow — hover background
-const SECONDARY_BORDER = "#FDE68A"; // yellow border accent on hover
+const PRIMARY_LIGHT = "#9CD5FF"; // soft blue tint for backgrounds
+const SECONDARY = "#9CD5FF"; // light yellow — hover background
+const SECONDARY_BORDER = "#9CD5FF"; // yellow border accent on hover
 const SECONDARY_TEXT = "#92400E"; // amber-brown for text on yellow
 
 const ITEMS_PER_PAGE = 8;
