@@ -551,7 +551,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 
 // ReportFlow brand colors
-const PRIMARY = "#2563EB"; // ReportFlow blue
+const PRIMARY = "#3A9AFF"; // ReportFlow blue
 const PRIMARY_LIGHT = "#EFF4FF"; // soft blue tint for backgrounds
 const SECONDARY = "#FEFCE8"; // light yellow — hover background
 const SECONDARY_BORDER = "#FDE68A"; // yellow border accent on hover
