@@ -667,21 +667,14 @@ const Explorer = () => {
     const dlData = await dlRes.json();
     const blobPath = dlData.blob_path || dlData.file_name || `${workbookName}.twbx`;
 
-    const dsRes = await fetch(`${BASE}/download_workbook_datasources`, {
+    const filename = blobPath.split("/").pop() || `${workbookName}.twbx`;
+    const parseRes = await fetch(`https://tomgenerator-b0e2byeyhmc5caht.eastus-01.azurewebsites.net/parse/${encodeURIComponent(filename)}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ api_token: token, workbook_id: workbookId }),
+      headers: { accept: "application/json" },
     });
-    if (!dsRes.ok) throw new Error("Failed to download datasources");
-
-    const exRes = await fetch("https://dataset-extraction2-gbdnhcd0dxeaf6df.eastus-01.azurewebsites.net/extract-data", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ blob_path: blobPath }),
-    });
-    if (!exRes.ok) throw new Error("Failed to extract data");
-    const exData = await exRes.json();
-    sessionStorage.setItem("extraction_output_files", JSON.stringify(exData.output_files || []));
+    if (!parseRes.ok) throw new Error("Failed to parse workbook");
+    const parseData = await parseRes.json();
+    sessionStorage.setItem("parsed_workbook_data", JSON.stringify(parseData));
     return true;
   };
 
