@@ -92,12 +92,17 @@ const DestinationWorkspaceSelection = () => {
       }
       setError(null);
 
-      const response = await fetch(`${BACKEND_BASE_URL}/api/workspaces`, {
+      const response = await fetch(`${BACKEND_BASE_URL}/workspaces`, {
         credentials: "include",
       });
 
-      if (response.status === 401) {
-        // Not authenticated - redirect to login
+      if (response.status === 401 || response.status === 403) {
+        // Token expired or not authenticated - redirect to login
+        toast({
+          title: "Session Expired",
+          description: "Your session has expired. Please sign in again.",
+          variant: "destructive",
+        });
         navigate("/login", { replace: true });
         setIsLoading(false);
         setIsRefreshing(false);
@@ -187,7 +192,7 @@ const DestinationWorkspaceSelection = () => {
     try {
       setIsCreatingWorkspace(true);
 
-      const response = await fetch(`${BACKEND_BASE_URL}/api/workspaces`, {
+      const response = await fetch(`${BACKEND_BASE_URL}/workspaces`, {
         method: "POST",
         credentials: "include",
         headers: {
@@ -226,7 +231,7 @@ const DestinationWorkspaceSelection = () => {
   // Add service principal to workspace
   const addServicePrincipalToWorkspace = async (workspaceId: string): Promise<boolean> => {
     try {
-      const response = await fetch(`${BACKEND_BASE_URL}/api/workspaces/add-sp`, {
+      const response = await fetch(`${BACKEND_BASE_URL}/workspaces/add-sp`, {
         method: "POST",
         credentials: "include",
         headers: {
@@ -267,7 +272,7 @@ const DestinationWorkspaceSelection = () => {
       console.log("Blob folder URL:", blobFolderUrl);
       console.log("Extraction files:", extractionFiles);
 
-      const response = await fetch(`${BACKEND_BASE_URL}/api/workspaces/${selectedWorkspace.id}/auto-upload`, {
+      const response = await fetch(`${BACKEND_BASE_URL}/workspaces/${selectedWorkspace.id}/auto-upload`, {
         method: "POST",
         credentials: "include",
         headers: {
