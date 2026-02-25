@@ -66,6 +66,9 @@ const Dashboard = () => {
   const [jobs, setJobs] = useState<MigrationJob[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Lakehouse response from sessionStorage
+  const [lakehouseData, setLakehouseData] = useState<any>(null);
+
   // 2. FIXED VARIABLE: Change this later when user auth is ready!
   const CURRENT_USER_EMAIL = "dummy@dummy.com";
 
@@ -73,6 +76,18 @@ const Dashboard = () => {
   useEffect(() => {
     sessionStorage.removeItem("powerbi_authenticated");
     sessionStorage.removeItem("selected_workbook");
+
+    // Load lakehouse response if available
+    const storedLakehouse = sessionStorage.getItem("lakehouse_response");
+    if (storedLakehouse) {
+      try {
+        const parsed = JSON.parse(storedLakehouse);
+        setLakehouseData(parsed);
+        console.log("Lakehouse response loaded:", parsed);
+      } catch (e) {
+        console.error("Failed to parse lakehouse_response:", e);
+      }
+    }
 
     const fetchJobs = async () => {
       try {
@@ -84,7 +99,6 @@ const Dashboard = () => {
 
         if (response.ok) {
           const data = await response.json();
-          // Sort so newest items appear first in the table
           const sortedData = data.sort(
             (a: MigrationJob, b: MigrationJob) => new Date(b.StartedAt).getTime() - new Date(a.StartedAt).getTime(),
           );
@@ -179,6 +193,49 @@ const Dashboard = () => {
             icon={<Clock className="w-5 h-5" />}
           />
         </div>
+
+        {/* Lakehouse Migration Summary */}
+        {lakehouseData && (
+          <div className="mb-8">
+            <h2 className="text-base font-semibold text-foreground mb-4">Latest Lakehouse Migration</h2>
+            <div className="bg-card rounded-lg border border-border p-5">
+              <div className="flex items-center gap-3 mb-4">
+                <CheckCircle2 className="w-5 h-5 text-green-600" />
+                <span className="text-sm font-medium text-foreground">{lakehouseData.message}</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+                <div>
+                  <p className="text-xs text-muted-foreground">Workbook</p>
+                  <p className="text-sm font-medium">{lakehouseData.workbook_name}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Lakehouse</p>
+                  <p className="text-sm font-medium">{lakehouseData.lakehouse_name}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Data Mode</p>
+                  <p className="text-sm font-medium capitalize">{lakehouseData.data_mode}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Tables Migrated</p>
+                  <p className="text-sm font-medium">{lakehouseData.summary?.total_migrated} ({lakehouseData.summary?.total_rows} rows)</p>
+                </div>
+              </div>
+              {lakehouseData.tables_migrated?.length > 0 && (
+                <div className="border-t border-border pt-3">
+                  <p className="text-xs text-muted-foreground mb-2">Tables</p>
+                  <div className="flex flex-wrap gap-2">
+                    {lakehouseData.tables_migrated.map((t: any) => (
+                      <span key={t.table_name} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-muted text-xs font-medium">
+                        {t.table_name} <span className="text-muted-foreground">({t.rows}r × {t.columns}c)</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Source Cards */}
         <div className="mb-8">
