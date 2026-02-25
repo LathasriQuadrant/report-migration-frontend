@@ -351,6 +351,10 @@ const DestinationWorkspaceSelection = () => {
       sessionStorage.setItem("upload_response", JSON.stringify(result));
       sessionStorage.setItem("report_name", result.report_name || nodeInfo.name);
       sessionStorage.setItem("report_id", result.report_id || "");
+      if (result.datasetId) {
+        sessionStorage.setItem("datasetId", result.datasetId);
+        console.log("Stored datasetId:", result.datasetId);
+      }
       sessionStorage.setItem("workspace_id", result.workspace_id || selectedWorkspace.id);
       sessionStorage.setItem("workspace_name", selectedWorkspace.name);
 

@@ -63,6 +63,10 @@ export default function Migration() {
         const metaData = await metaRes.json();
         console.log("Metadata extraction response:", metaData);
         sessionStorage.setItem("metadata_response", JSON.stringify(metaData));
+        if (metaData.outputBlobUrl) {
+          sessionStorage.setItem("metadataOutputBlobUrl", metaData.outputBlobUrl);
+          console.log("Stored metadataOutputBlobUrl:", metaData.outputBlobUrl);
+        }
         updateStep(0, "completed", "Metadata Extraction completed");
       } catch (err: any) {
         log("Metadata extraction error: " + err.message);
