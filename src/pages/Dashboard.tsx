@@ -61,7 +61,7 @@ const migrationSources = [
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, checkAuth } = useAuth();
   const [showTableauAuth, setShowTableauAuth] = useState(false);
 
   // State for holding API data
@@ -71,14 +71,17 @@ const Dashboard = () => {
   // Use authenticated user's email
   const CURRENT_USER_EMAIL = user?.email || "dummy@dummy.com";
 
-  // 3. Fetch data from your live Azure Backend
+  // 3. On mount: call /auth/me to get real user details, then fetch jobs
   useEffect(() => {
-    sessionStorage.removeItem("powerbi_authenticated");
-    sessionStorage.removeItem("selected_workbook");
+    const init = async () => {
+      // Hit /auth/me to refresh user details from backend session
+      await checkAuth();
+      console.log("Dashboard: /auth/me called, user refreshed");
 
-    const fetchJobs = async () => {
+      // Now fetch migration jobs with the real user email
+      const email = sessionStorage.getItem("azure_user_email") || user?.email || CURRENT_USER_EMAIL;
       try {
-        const userId = encodeURIComponent(CURRENT_USER_EMAIL);
+        const userId = encodeURIComponent(email);
         const response = await fetch(
           `https://databasemanagement-e0e0d7bqhdg3gec7.eastus-01.azurewebsites.net/jobs/user/${userId}`,
         );
@@ -86,7 +89,6 @@ const Dashboard = () => {
 
         if (response.ok) {
           const data = await response.json();
-          // Sort so newest items appear first in the table
           const sortedData = data.sort(
             (a: MigrationJob, b: MigrationJob) => new Date(b.StartedAt).getTime() - new Date(a.StartedAt).getTime(),
           );
@@ -101,7 +103,7 @@ const Dashboard = () => {
       }
     };
 
-    fetchJobs();
+    init();
   }, []);
 
   const handleSourceClick = (sourceId: string) => {
