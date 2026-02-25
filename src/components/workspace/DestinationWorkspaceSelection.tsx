@@ -292,8 +292,11 @@ const DestinationWorkspaceSelection = () => {
 
       console.log("Auto-upload successful:", result);
 
-      sessionStorage.setItem("report_name", nodeInfo.name);
-      sessionStorage.setItem("workspace_id", selectedWorkspace.id);
+      // Store full response and key fields in sessionStorage
+      sessionStorage.setItem("upload_response", JSON.stringify(result));
+      sessionStorage.setItem("report_name", result.report_name || nodeInfo.name);
+      sessionStorage.setItem("report_id", result.report_id || "");
+      sessionStorage.setItem("workspace_id", result.workspace_id || selectedWorkspace.id);
       sessionStorage.setItem("workspace_name", selectedWorkspace.name);
 
       toast({
