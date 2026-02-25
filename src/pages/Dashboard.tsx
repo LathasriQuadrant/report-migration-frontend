@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
 import { FileStack, CheckCircle2, History, LayoutGrid, Clock } from "lucide-react";
 import SourceCard from "@/components/dashboard/SourceCard";
 import StatsCard from "@/components/dashboard/StatsCard";
@@ -61,27 +60,23 @@ const migrationSources = [
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { user, checkAuth } = useAuth();
   const [showTableauAuth, setShowTableauAuth] = useState(false);
 
   // State for holding API data
   const [jobs, setJobs] = useState<MigrationJob[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Use authenticated user's email
-  const CURRENT_USER_EMAIL = user?.email || "dummy@dummy.com";
+  // 2. FIXED VARIABLE: Change this later when user auth is ready!
+  const CURRENT_USER_EMAIL = "dummy@dummy.com";
 
-  // 3. On mount: call /auth/me to get real user details, then fetch jobs
+  // 3. Fetch data from your live Azure Backend
   useEffect(() => {
-    const init = async () => {
-      // Hit /auth/me to refresh user details from backend session
-      await checkAuth();
-      console.log("Dashboard: /auth/me called, user refreshed");
+    sessionStorage.removeItem("powerbi_authenticated");
+    sessionStorage.removeItem("selected_workbook");
 
-      // Now fetch migration jobs with the real user email
-      const email = sessionStorage.getItem("azure_user_email") || user?.email || CURRENT_USER_EMAIL;
+    const fetchJobs = async () => {
       try {
-        const userId = encodeURIComponent(email);
+        const userId = encodeURIComponent(CURRENT_USER_EMAIL);
         const response = await fetch(
           `https://databasemanagement-e0e0d7bqhdg3gec7.eastus-01.azurewebsites.net/jobs/user/${userId}`,
         );
@@ -89,6 +84,7 @@ const Dashboard = () => {
 
         if (response.ok) {
           const data = await response.json();
+          // Sort so newest items appear first in the table
           const sortedData = data.sort(
             (a: MigrationJob, b: MigrationJob) => new Date(b.StartedAt).getTime() - new Date(a.StartedAt).getTime(),
           );
@@ -103,7 +99,7 @@ const Dashboard = () => {
       }
     };
 
-    init();
+    fetchJobs();
   }, []);
 
   const handleSourceClick = (sourceId: string) => {
