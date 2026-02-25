@@ -54,33 +54,13 @@ export default function Migration() {
     const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
     const run = async () => {
-      try {
-        // Step 0: Metadata Extraction – real API call
-        updateStep(0, "running", "Extracting metadata…");
-        const metadataRes = await fetch(
-          `https://relationship-e4hraba6bxg3h6bc.eastus-01.azurewebsites.net/extract-metadata?folder_name=${encodeURIComponent(reportName)}`,
-          { method: "POST" }
-        );
-        if (!metadataRes.ok) throw new Error(`Metadata extraction failed: ${metadataRes.status}`);
-        const metadataResult = await metadataRes.json();
-        console.log("Metadata extraction response:", metadataResult);
-        sessionStorage.setItem("metadata_response", JSON.stringify(metadataResult));
-        updateStep(0, "completed", "Metadata extracted successfully");
-
-        // Steps 1-4: auto-complete simulation
-        for (let i = 1; i < steps.length; i++) {
-          updateStep(i, "running", "Processing…");
-          await delay(1200);
-          updateStep(i, "completed", initialSteps[i].name + " completed");
-        }
-        log("Migration flow completed");
-        setIsComplete(true);
-      } catch (err: any) {
-        log(`Error: ${err.message}`);
-        setFatalError(err.message);
-        const runningIdx = steps.findIndex((s) => s.status === "running");
-        if (runningIdx >= 0) updateStep(runningIdx, "failed", err.message);
+      for (let i = 0; i < steps.length; i++) {
+        updateStep(i, "running", "Processing…");
+        await delay(1200);
+        updateStep(i, "completed", initialSteps[i].name + " completed");
       }
+      log("Migration flow auto-completed");
+      setIsComplete(true);
     };
 
     run();
