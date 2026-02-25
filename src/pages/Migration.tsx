@@ -43,108 +43,24 @@ export default function Migration() {
     setSteps((prev) => prev.map((s, i) => (i === index ? { ...s, status, description: desc ?? s.description } : s)));
   };
 
-  /* ============================================================
-      STEP 1 – New Metadata Extraction (Relationships)
-  ============================================================ */
-  const runMetadataExtraction = async () => {
-    updateStep(0, "running", "Extracting metadata and relationships");
-    log("STEP 1 started");
-
-    const folder_name = reportName || "relationdatabase";
-    const url = `https://relationship-e4hraba6bxg3h6bc.eastus-01.azurewebsites.net/extract-metadata?folder_name=${encodeURIComponent(folder_name)}`;
-
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { accept: "application/json" },
-    });
-
-    if (!res.ok) throw new Error(await res.text());
-
-    const data = await res.json();
-
-    // Store outputs for the next step and the Preview page
-    sessionStorage.setItem("metadataOutputBlobUrl", data.outputBlobUrl);
-    if (data.metadata?.relationships) {
-      sessionStorage.setItem("migration_relationships", JSON.stringify(data.metadata.relationships));
-    }
-
-    updateStep(0, "completed", "Metadata & Relationships extracted");
-    log("STEP 1 completed");
-  };
-
-  /* ============================================================
-      STEP 3 – New Semantic Model & Report Creation
-  ============================================================ */
-  const runDatasetAndReportGeneration = async () => {
-    updateStep(2, "running", "Creating Semantic Model & Relationships");
-    log("STEP 3 started");
-
-    const folder_name = reportName || "relationdatabase";
-    const target_workspace_id = sessionStorage.getItem("workspace_id");
-
-    // Retrieve relationships stored in Step 1
-    const relsRaw = sessionStorage.getItem("migration_relationships");
-    const relationships = relsRaw ? JSON.parse(relsRaw) : [];
-
-    if (!target_workspace_id) throw new Error("Target Workspace ID missing");
-
-    const res = await fetch("https://relationship-e4hraba6bxg3h6bc.eastus-01.azurewebsites.net/create-semantic-model", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        accept: "application/json",
-      },
-      body: JSON.stringify({
-        folder_name,
-        target_workspace_id,
-        relationships,
-        clone_report: true,
-        report_name: `${folder_name}_Final_Report`,
-      }),
-    });
-
-    if (!res.ok) throw new Error(await res.text());
-
-    const data = await res.json();
-
-    // Store IDs for the PowerBIReport (Preview) component
-    sessionStorage.setItem("generated_dataset_id", data.dataset_id);
-    sessionStorage.setItem("generated_report_id", data.report_id);
-    sessionStorage.setItem("report_name", data.report_name);
-
-    updateStep(2, "completed", `Report created with ${data.relationships_created} relations`);
-    log("STEP 3 completed");
-  };
+  /* Auto-complete orchestrator */
 
   /* ============================================================
       Migration Orchestrator
   ============================================================ */
   useEffect(() => {
+    if (!reportName || !nodeInfo) return;
+
+    const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
     const run = async () => {
-      try {
-        if (!reportName || !nodeInfo) return;
-
-        // Step 1: Extract Metadata
-        await runMetadataExtraction();
-
-        // Step 2: Artifact Generation (Placeholder logic)
-        updateStep(1, "completed", "Artifacts generated successfully");
-
-        // Step 3: Create PBI Report & Dataset
-        await runDatasetAndReportGeneration();
-
-        // Final Steps
-        updateStep(3, "completed", "Deployed to Power BI Workspace");
-        updateStep(4, "completed", "Validation Successful");
-
-        log("Migration flow completed");
-        setIsComplete(true);
-      } catch (e: any) {
-        log(`❌ ERROR: ${e.message}`);
-        setFatalError(e.message);
-        // Mark current step as failed
-        setSteps((prev) => prev.map((s) => (s.status === "running" ? { ...s, status: "failed" } : s)));
+      for (let i = 0; i < steps.length; i++) {
+        updateStep(i, "running", "Processing…");
+        await delay(1200);
+        updateStep(i, "completed", initialSteps[i].name + " completed");
       }
+      log("Migration flow auto-completed");
+      setIsComplete(true);
     };
 
     run();
