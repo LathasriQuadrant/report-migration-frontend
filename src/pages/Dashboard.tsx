@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import { FileStack, CheckCircle2, History, LayoutGrid, Clock } from "lucide-react";
 import SourceCard from "@/components/dashboard/SourceCard";
 import StatsCard from "@/components/dashboard/StatsCard";
@@ -60,14 +61,15 @@ const migrationSources = [
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [showTableauAuth, setShowTableauAuth] = useState(false);
 
   // State for holding API data
   const [jobs, setJobs] = useState<MigrationJob[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 2. FIXED VARIABLE: Change this later when user auth is ready!
-  const CURRENT_USER_EMAIL = "dummy@dummy.com";
+  // Use authenticated user's email
+  const CURRENT_USER_EMAIL = user?.email || "dummy@dummy.com";
 
   // 3. Fetch data from your live Azure Backend
   useEffect(() => {
