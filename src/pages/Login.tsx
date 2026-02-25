@@ -5,7 +5,7 @@ import { Shield, Zap, Clock, ArrowLeft, ExternalLink, Loader2 } from "lucide-rea
 import { useAuth } from "@/contexts/AuthContext";
 
 const BACKEND_BASE_URL = "https://powerbi-azure-auth-app-e6dtdsb2ccawg9cy.eastus-01.azurewebsites.net";
-const LOGIN_URL = `${BACKEND_BASE_URL}/auth/login`;
+const LOGIN_URL = `${BACKEND_BASE_URL}/login`;
 
 const Login = () => {
   const navigate = useNavigate();
