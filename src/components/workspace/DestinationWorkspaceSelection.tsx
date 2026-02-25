@@ -349,12 +349,21 @@ const DestinationWorkspaceSelection = () => {
 
       // Store full response and key fields in sessionStorage
       sessionStorage.setItem("upload_response", JSON.stringify(result));
+      sessionStorage.setItem("upload_message", result.message || "");
+      sessionStorage.setItem("upload_workspace_id", result.workspace_id || selectedWorkspace.id);
+      sessionStorage.setItem("upload_report_name", result.report_name || nodeInfo.name);
+      sessionStorage.setItem("upload_report_id", result.report_id || "");
+      sessionStorage.setItem("upload_dataset_id", result.dataset_id || "");
+      console.log("Stored upload response keys:", {
+        message: result.message,
+        workspace_id: result.workspace_id,
+        report_name: result.report_name,
+        report_id: result.report_id,
+        dataset_id: result.dataset_id,
+      });
+      // Keep legacy keys for backward compatibility
       sessionStorage.setItem("report_name", result.report_name || nodeInfo.name);
       sessionStorage.setItem("report_id", result.report_id || "");
-      if (result.datasetId) {
-        sessionStorage.setItem("datasetId", result.datasetId);
-        console.log("Stored datasetId:", result.datasetId);
-      }
       sessionStorage.setItem("workspace_id", result.workspace_id || selectedWorkspace.id);
       sessionStorage.setItem("workspace_name", selectedWorkspace.name);
 
