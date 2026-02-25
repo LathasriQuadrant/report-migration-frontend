@@ -71,23 +71,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    const initAuth = async () => {
+    const initAuth = () => {
       setIsLoading(true);
-
-      // Set temporary user from sessionStorage so UI doesn't flash
+      // Only check sessionStorage on mount – no /auth/me call here
+      // /auth/me is called after login on the dashboard page
       checkLocalAuth();
-
-      // Always call /auth/me to get real user details
-      const authenticated = await checkAuth();
-
-      if (!authenticated) {
-        // If /auth/me failed but we had local auth, keep local state
-        // Otherwise user stays null and will be redirected
-        if (!checkLocalAuth()) {
-          setUser(null);
-        }
-      }
-
       setIsLoading(false);
     };
     initAuth();
