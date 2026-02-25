@@ -80,7 +80,6 @@ const Dashboard = () => {
         const response = await fetch(
           `https://databasemanagement-e0e0d7bqhdg3gec7.eastus-01.azurewebsites.net/jobs/user/${userId}`,
         );
-        console.log(response);
 
         if (response.ok) {
           const data = await response.json();
