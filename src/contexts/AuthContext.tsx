@@ -74,16 +74,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const initAuth = async () => {
       setIsLoading(true);
 
-      // First check local auth (faster, no network call)
-      if (checkLocalAuth()) {
-        setIsLoading(false);
-        // Still verify with backend in background
-        checkAuth();
-        return;
+      // Set temporary user from sessionStorage so UI doesn't flash
+      checkLocalAuth();
+
+      // Always call /auth/me to get real user details
+      const authenticated = await checkAuth();
+
+      if (!authenticated) {
+        // If /auth/me failed but we had local auth, keep local state
+        // Otherwise user stays null and will be redirected
+        if (!checkLocalAuth()) {
+          setUser(null);
+        }
       }
 
-      // Then check Azure AD auth via /auth/me
-      await checkAuth();
       setIsLoading(false);
     };
     initAuth();
