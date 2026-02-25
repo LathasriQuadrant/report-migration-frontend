@@ -1,98 +1,91 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search, Filter, ExternalLink, ChevronRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import AppLayout from '@/components/layout/AppLayout';
-import { MigrationRecord } from '@/types/migration';
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { ArrowLeft, Search, Filter, ExternalLink, ChevronRight, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import AppLayout from "@/components/layout/AppLayout";
 
-const sampleHistory: MigrationRecord[] = [
-  {
-    id: 'mig-1',
-    sourceSystem: 'tableau',
-    sourcePath: 'Sales & Marketing / Q4 2024 Analytics / Sales Overview',
-    reportName: 'Regional Performance',
-    status: 'completed',
-    startedAt: new Date('2024-12-15T14:30:00'),
-    completedAt: new Date('2024-12-15T14:35:00'),
-    powerBILink: '/report/mig-1',
-  },
-  {
-    id: 'mig-2',
-    sourceSystem: 'microstrategy',
-    sourcePath: 'Enterprise Reports / Financial',
-    reportName: 'Financial KPIs Dashboard',
-    status: 'completed',
-    startedAt: new Date('2024-12-15T10:15:00'),
-    completedAt: new Date('2024-12-15T10:22:00'),
-    powerBILink: '/report/mig-2',
-  },
-  {
-    id: 'mig-3',
-    sourceSystem: 'sapbo',
-    sourcePath: 'CRM Analytics / Customer Insights',
-    reportName: 'Customer 360 View',
-    status: 'running',
-    startedAt: new Date('2024-12-15T15:00:00'),
-  },
-  {
-    id: 'mig-4',
-    sourceSystem: 'tableau',
-    sourcePath: 'Operations / Supply Chain',
-    reportName: 'Inventory Management',
-    status: 'completed',
-    startedAt: new Date('2024-12-14T09:00:00'),
-    completedAt: new Date('2024-12-14T09:08:00'),
-    powerBILink: '/report/mig-4',
-  },
-  {
-    id: 'mig-5',
-    sourceSystem: 'cognos',
-    sourcePath: 'HR Analytics / Workforce',
-    reportName: 'Employee Dashboard',
-    status: 'failed',
-    startedAt: new Date('2024-12-13T16:45:00'),
-    completedAt: new Date('2024-12-13T16:48:00'),
-  },
-  {
-    id: 'mig-6',
-    sourceSystem: 'tableau',
-    sourcePath: 'Marketing / Campaign Analytics',
-    reportName: 'Campaign Performance',
-    status: 'completed',
-    startedAt: new Date('2024-12-13T11:20:00'),
-    completedAt: new Date('2024-12-13T11:26:00'),
-    powerBILink: '/report/mig-6',
-  },
-];
-
-const sourceLabels: Record<string, string> = {
-  tableau: 'Tableau',
-  microstrategy: 'MicroStrategy',
-  sapbo: 'SAP BO',
-  cognos: 'Cognos',
-};
+// 1. Update the interface to match your FastAPI backend schema
+interface MigrationJob {
+  Id: number;
+  UserId: string;
+  ReportName: string;
+  ReportPath: string | null;
+  SourceReportId: string | null;
+  SourcePlatform: string;
+  TargetPlatform: string;
+  MigrationStatus: string;
+  ErrorMessage: string | null;
+  StartedAt: string;
+  CompletedAt: string | null;
+  DurationMinutes: number | null;
+  SheetsCount: number;
+  DashboardsCount: number;
+  WorkbooksCount: number;
+}
 
 const History = () => {
   const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
 
-  const filteredHistory = sampleHistory.filter((item) => {
-    const matchesSearch = item.reportName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.sourcePath.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFilter = !filterStatus || item.status === filterStatus;
+  // 2. Add State for the API data
+  const [history, setHistory] = useState<MigrationJob[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // FIXED VARIABLE: Change this later when user auth is ready!
+  const CURRENT_USER_EMAIL = "dummy@dummy.com";
+
+  // 3. Fetch data from your live Azure Backend
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const userId = encodeURIComponent(CURRENT_USER_EMAIL);
+        const response = await fetch(
+          `https://databasemanagement-e0e0d7bqhdg3gec7.eastus-01.azurewebsites.net/jobs/user/${userId}`,
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          // Sort so newest migrations appear at the top
+          const sortedData = data.sort(
+            (a: MigrationJob, b: MigrationJob) => new Date(b.StartedAt).getTime() - new Date(a.StartedAt).getTime(),
+          );
+          setHistory(sortedData);
+        } else {
+          console.error("Failed to fetch history");
+        }
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchHistory();
+  }, []);
+
+  // 4. Update filtering to use the real API data and handle potential nulls
+  const filteredHistory = history.filter((item) => {
+    const searchLower = searchQuery.toLowerCase();
+    const pathLower = item.ReportPath ? item.ReportPath.toLowerCase() : "";
+
+    const matchesSearch = item.ReportName.toLowerCase().includes(searchLower) || pathLower.includes(searchLower);
+
+    // API returns 'Completed', 'Running', etc. (capitalized), so we lowercase both to safely compare
+    const matchesFilter = !filterStatus || item.MigrationStatus.toLowerCase() === filterStatus.toLowerCase();
+
     return matchesSearch && matchesFilter;
   });
 
-  const formatDate = (date: Date) => {
-    return new Intl.DateTimeFormat('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    }).format(date);
+  const formatDate = (dateString: string) => {
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(new Date(dateString));
   };
 
   return (
@@ -100,10 +93,7 @@ const History = () => {
       <div className="max-w-7xl mx-auto">
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm text-muted-foreground mb-6">
-          <button
-            onClick={() => navigate('/')}
-            className="hover:text-foreground transition-colors"
-          >
+          <button onClick={() => navigate("/")} className="hover:text-foreground transition-colors">
             Dashboard
           </button>
           <ChevronRight className="w-4 h-4" />
@@ -113,14 +103,12 @@ const History = () => {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
+            <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div>
               <h1 className="text-2xl font-bold text-foreground">Migration History</h1>
-              <p className="text-sm text-muted-foreground">
-                View and manage all your report migrations
-              </p>
+              <p className="text-sm text-muted-foreground">View and manage all your report migrations</p>
             </div>
           </div>
         </div>
@@ -139,7 +127,7 @@ const History = () => {
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-muted-foreground" />
             <select
-              value={filterStatus || ''}
+              value={filterStatus || ""}
               onChange={(e) => setFilterStatus(e.target.value || null)}
               className="h-10 px-3 rounded-md border border-input bg-background text-sm"
             >
@@ -147,6 +135,7 @@ const History = () => {
               <option value="completed">Completed</option>
               <option value="running">Running</option>
               <option value="failed">Failed</option>
+              <option value="pending">Pending</option>
             </select>
           </div>
         </div>
@@ -178,81 +167,101 @@ const History = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filteredHistory.map((item) => {
-                  const duration = item.completedAt
-                    ? Math.round((item.completedAt.getTime() - item.startedAt.getTime()) / 60000)
-                    : null;
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                        <span>Loading migration history...</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : filteredHistory.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
+                      No migrations found matching your criteria.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredHistory.map((item) => {
+                    // Safe lowercase status for your CSS classes
+                    const statusStr = item.MigrationStatus.toLowerCase();
 
-                  return (
-                    <tr key={item.id} className="hover:bg-muted/30 transition-colors">
-                      <td className="px-4 py-4">
-                        <div>
-                          <p className="font-medium text-foreground">{item.reportName}</p>
-                          <p className="text-xs text-muted-foreground truncate max-w-xs">
-                            {item.sourcePath}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className="text-sm text-muted-foreground">
-                          {sourceLabels[item.sourceSystem]}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4">
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium
-                            ${item.status === 'completed' ? 'status-completed' : ''}
-                            ${item.status === 'running' ? 'status-running pulse-running' : ''}
-                            ${item.status === 'failed' ? 'status-failed' : ''}
-                          `}
-                        >
+                    // Fallback duration logic if the database didn't compute it
+                    const duration =
+                      item.DurationMinutes !== null
+                        ? item.DurationMinutes
+                        : item.CompletedAt
+                          ? Math.round(
+                              (new Date(item.CompletedAt).getTime() - new Date(item.StartedAt).getTime()) / 60000,
+                            )
+                          : null;
+
+                    return (
+                      <tr key={item.Id} className="hover:bg-muted/30 transition-colors">
+                        <td className="px-4 py-4">
+                          <div>
+                            <p className="font-medium text-foreground">{item.ReportName}</p>
+                            <p className="text-xs text-muted-foreground truncate max-w-xs">
+                              {item.ReportPath || "Root folder"}
+                            </p>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <span className="text-sm text-muted-foreground">{item.SourcePlatform}</span>
+                        </td>
+                        <td className="px-4 py-4">
                           <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              item.status === 'completed'
-                                ? 'bg-success'
-                                : item.status === 'running'
-                                ? 'bg-info'
-                                : 'bg-destructive'
-                            }`}
-                          />
-                          {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 text-sm text-muted-foreground">
-                        {formatDate(item.startedAt)}
-                      </td>
-                      <td className="px-4 py-4 text-sm text-muted-foreground">
-                        {duration !== null ? `${duration} min` : '—'}
-                      </td>
-                      <td className="px-4 py-4 text-right">
-                        {item.status === 'completed' && item.powerBILink && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => navigate(item.powerBILink!)}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium
+                              ${statusStr === "completed" ? "status-completed" : ""}
+                              ${statusStr === "running" ? "status-running pulse-running" : ""}
+                              ${statusStr === "failed" ? "status-failed" : ""}
+                              ${statusStr === "pending" ? "bg-muted text-muted-foreground" : ""}
+                            `}
                           >
-                            <ExternalLink className="w-4 h-4 mr-1" />
-                            View
-                          </Button>
-                        )}
-                        {item.status === 'failed' && (
-                          <Button variant="ghost" size="sm" className="text-destructive">
-                            Retry
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                statusStr === "completed"
+                                  ? "bg-success"
+                                  : statusStr === "running"
+                                    ? "bg-info"
+                                    : statusStr === "failed"
+                                      ? "bg-destructive"
+                                      : "bg-muted-foreground"
+                              }`}
+                            />
+                            {item.MigrationStatus}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-sm text-muted-foreground">{formatDate(item.StartedAt)}</td>
+                        <td className="px-4 py-4 text-sm text-muted-foreground">
+                          {duration !== null ? `${duration} min` : "—"}
+                        </td>
+                        <td className="px-4 py-4 text-right">
+                          {statusStr === "completed" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              // Uses a dummy route for now until Power BI is linked
+                              onClick={() => navigate(`/report/${item.Id}`)}
+                            >
+                              <ExternalLink className="w-4 h-4 mr-1" />
+                              View
+                            </Button>
+                          )}
+                          {statusStr === "failed" && (
+                            <Button variant="ghost" size="sm" className="text-destructive">
+                              Retry
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
-
-          {filteredHistory.length === 0 && (
-            <div className="text-center py-12">
-              <p className="text-muted-foreground">No migrations found matching your criteria</p>
-            </div>
-          )}
         </div>
       </div>
     </AppLayout>
