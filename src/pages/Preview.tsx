@@ -45,8 +45,8 @@ export default function PowerBIReport() {
 
   /* ---------------- SESSION DATA ---------------- */
   const workspaceId = sessionStorage.getItem("workspace_id");
-  const reportId = sessionStorage.getItem("generated_report_id");
-  const datasetId = sessionStorage.getItem("generated_dataset_id");
+  const reportId = sessionStorage.getItem("upload_report_id");
+  const datasetId = sessionStorage.getItem("upload_dataset_id");
   const metadataBlobUrl = sessionStorage.getItem("metadataOutputBlobUrl");
   const rawReportName = sessionStorage.getItem("report_name") || "sampletbl";
 
