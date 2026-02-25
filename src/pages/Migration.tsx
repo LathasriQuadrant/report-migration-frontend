@@ -54,12 +54,30 @@ export default function Migration() {
     const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
     const run = async () => {
-      for (let i = 0; i < steps.length; i++) {
+      // Step 1 – Metadata Extraction (real API call)
+      updateStep(0, "running", "Extracting metadata…");
+      try {
+        const metadataUrl = `https://relationship-e4hraba6bxg3h6bc.eastus-01.azurewebsites.net/extract-metadata?folder_name=${encodeURIComponent(reportName)}`;
+        const metaRes = await fetch(metadataUrl, { method: "POST" });
+        if (!metaRes.ok) throw new Error(`Metadata extraction failed (${metaRes.status})`);
+        const metaData = await metaRes.json();
+        console.log("Metadata extraction response:", metaData);
+        sessionStorage.setItem("metadata_response", JSON.stringify(metaData));
+        updateStep(0, "completed", "Metadata Extraction completed");
+      } catch (err: any) {
+        log("Metadata extraction error: " + err.message);
+        updateStep(0, "failed", err.message);
+        setFatalError(err.message);
+        return;
+      }
+
+      // Steps 2–5 auto-complete
+      for (let i = 1; i < steps.length; i++) {
         updateStep(i, "running", "Processing…");
         await delay(1200);
         updateStep(i, "completed", initialSteps[i].name + " completed");
       }
-      log("Migration flow auto-completed");
+      log("Migration flow completed");
       setIsComplete(true);
     };
 
