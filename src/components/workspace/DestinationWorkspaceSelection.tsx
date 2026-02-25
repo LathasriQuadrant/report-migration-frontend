@@ -83,6 +83,12 @@ const DestinationWorkspaceSelection = () => {
   // Auto-upload state
   const [isUploading, setIsUploading] = useState(false);
 
+  // Lakehouse password retry state
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [lakehousePassword, setLakehousePassword] = useState("");
+  const [isRetryingLakehouse, setIsRetryingLakehouse] = useState(false);
+  const [pendingLakehousePayload, setPendingLakehousePayload] = useState<{ file_name: string; workspace_id: string } | null>(null);
+
   const fetchWorkspaces = async (showRefreshToast = false) => {
     try {
       if (showRefreshToast) {
@@ -257,6 +263,25 @@ const DestinationWorkspaceSelection = () => {
     }
   };
 
+  const LAKEHOUSE_URL = "https://live-data-lakehouse-erbghyatb6f4awgf.eastus-01.azurewebsites.net/api/v1/lakehouse/migrate";
+
+  const callLakehouseMigrate = async (fileName: string, workspaceId: string, password?: string) => {
+    const body: Record<string, string> = { file_name: fileName, workspace_id: workspaceId };
+    if (password) body.password = password;
+
+    const res = await fetch(LAKEHOUSE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", accept: "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    const data = await res.json();
+    if (!res.ok || data.status !== "success") {
+      throw new Error(data.detail || data.message || "Lakehouse migration failed");
+    }
+    return data;
+  };
+
   const handleAutoUpload = async () => {
     if (!selectedWorkspace || !nodeInfo) return;
 
@@ -299,20 +324,26 @@ const DestinationWorkspaceSelection = () => {
       sessionStorage.setItem("workspace_id", result.workspace_id || selectedWorkspace.id);
       sessionStorage.setItem("workspace_name", selectedWorkspace.name);
 
-      toast({
-        title: "Success",
-        description: `Power BI template uploaded and migration completed for "${selectedWorkspace.name}"`,
-      });
+      // ---- Lakehouse Migrate ----
+      const fileName = `${nodeInfo.name}.twbx`;
+      try {
+        const lakehouseResult = await callLakehouseMigrate(fileName, selectedWorkspace.id);
+        console.log("Lakehouse migration successful:", lakehouseResult);
+        sessionStorage.setItem("lakehouse_response", JSON.stringify(lakehouseResult));
 
-      // Navigate to migration page after successful upload + migration
-      navigate(`/migrate/${nodeInfo.id}`, {
-        state: {
-          node: nodeInfo,
-          source: sourceId,
-          workspace: selectedWorkspace,
-          blobFolderUrl,
-        },
-      });
+        toast({
+          title: "Success",
+          description: `Migration completed for "${selectedWorkspace.name}"`,
+        });
+
+        navigate(`/migrate/${nodeInfo.id}`, {
+          state: { node: nodeInfo, source: sourceId, workspace: selectedWorkspace, blobFolderUrl },
+        });
+      } catch (lakehouseErr) {
+        console.warn("Lakehouse migrate failed without password, prompting user:", lakehouseErr);
+        setPendingLakehousePayload({ file_name: fileName, workspace_id: selectedWorkspace.id });
+        setShowPasswordDialog(true);
+      }
     } catch (err) {
       console.error("Migration error:", err);
       toast({
@@ -322,6 +353,44 @@ const DestinationWorkspaceSelection = () => {
       });
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handlePasswordRetry = async () => {
+    if (!pendingLakehousePayload || !lakehousePassword.trim()) return;
+
+    setIsRetryingLakehouse(true);
+    try {
+      const lakehouseResult = await callLakehouseMigrate(
+        pendingLakehousePayload.file_name,
+        pendingLakehousePayload.workspace_id,
+        lakehousePassword.trim(),
+      );
+      console.log("Lakehouse migration with password successful:", lakehouseResult);
+      sessionStorage.setItem("lakehouse_response", JSON.stringify(lakehouseResult));
+
+      setShowPasswordDialog(false);
+      setLakehousePassword("");
+      setPendingLakehousePayload(null);
+
+      toast({
+        title: "Success",
+        description: "Lakehouse migration completed successfully",
+      });
+
+      const blobFolderUrl = sessionStorage.getItem("extraction_output_folder") || "";
+      navigate(`/migrate/${nodeInfo!.id}`, {
+        state: { node: nodeInfo, source: sourceId, workspace: selectedWorkspace, blobFolderUrl },
+      });
+    } catch (err) {
+      console.error("Lakehouse retry failed:", err);
+      toast({
+        title: "Lakehouse Migration Failed",
+        description: err instanceof Error ? err.message : "Please check the password and try again",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRetryingLakehouse(false);
     }
   };
 
@@ -631,6 +700,34 @@ const DestinationWorkspaceSelection = () => {
             </Button>
             <Button variant="powerbi" onClick={handleCreateWorkspace} disabled={isCreatingWorkspace}>
               {isCreatingWorkspace ? "Creating..." : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Lakehouse Password Dialog */}
+      <Dialog open={showPasswordDialog} onOpenChange={(open) => { if (!open) { setShowPasswordDialog(false); setLakehousePassword(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Password Required</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            The data source requires authentication. Please enter the password to continue the migration.
+          </p>
+          <Input
+            type="password"
+            placeholder="Enter password"
+            value={lakehousePassword}
+            onChange={(e) => setLakehousePassword(e.target.value)}
+            autoFocus
+            onKeyDown={(e) => { if (e.key === "Enter") handlePasswordRetry(); }}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowPasswordDialog(false); setLakehousePassword(""); }}>
+              Cancel
+            </Button>
+            <Button variant="powerbi" onClick={handlePasswordRetry} disabled={isRetryingLakehouse || !lakehousePassword.trim()}>
+              {isRetryingLakehouse ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Retrying...</> : "Submit"}
             </Button>
           </DialogFooter>
         </DialogContent>
