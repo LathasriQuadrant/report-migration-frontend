@@ -264,6 +264,7 @@ const DestinationWorkspaceSelection = () => {
   };
 
   const LAKEHOUSE_URL = "https://live-data-lakehouse-erbghyatb6f4awgf.eastus-01.azurewebsites.net/api/v1/lakehouse/migrate";
+  const DEPLOY_URL = "https://xmla-semanticmodel-b8gbc7b0daape3fb.eastus-01.azurewebsites.net/api/Deploy";
 
   const callLakehouseMigrate = async (fileName: string, workspaceId: string, password?: string) => {
     const body: Record<string, string> = { file_name: fileName, workspace_id: workspaceId };
@@ -278,6 +279,35 @@ const DestinationWorkspaceSelection = () => {
     const data = await res.json();
     if (!res.ok || data.status !== "success") {
       throw new Error(data.detail || data.message || "Lakehouse migration failed");
+    }
+    return data;
+  };
+
+  const callDeploy = async (lakehouseResponse: any, workspaceName: string) => {
+    const parsedRaw = sessionStorage.getItem("parsed_workbook_data");
+    const modelSchema = parsedRaw ? JSON.parse(parsedRaw) : {};
+
+    const payload = {
+      workspaceName,
+      lakehouseServer: lakehouseResponse.sql_endpoint_connection,
+      lakehouseDatabase: lakehouseResponse.lakehouse_name,
+      modelSchema,
+    };
+
+    console.log("Deploy payload:", payload);
+
+    const res = await fetch(DEPLOY_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", accept: "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    console.log("Deploy response:", data);
+    sessionStorage.setItem("deploy_response", JSON.stringify(data));
+
+    if (!res.ok) {
+      throw new Error(data.detail || data.message || "Semantic model deployment failed");
     }
     return data;
   };
@@ -331,6 +361,9 @@ const DestinationWorkspaceSelection = () => {
         console.log("Lakehouse migration successful:", lakehouseResult);
         sessionStorage.setItem("lakehouse_response", JSON.stringify(lakehouseResult));
 
+        // Deploy semantic model
+        await callDeploy(lakehouseResult, selectedWorkspace.name);
+
         toast({
           title: "Success",
           description: `Migration completed for "${selectedWorkspace.name}"`,
@@ -368,6 +401,9 @@ const DestinationWorkspaceSelection = () => {
       );
       console.log("Lakehouse migration with password successful:", lakehouseResult);
       sessionStorage.setItem("lakehouse_response", JSON.stringify(lakehouseResult));
+
+      // Deploy semantic model
+      await callDeploy(lakehouseResult, selectedWorkspace!.name);
 
       setShowPasswordDialog(false);
       setLakehousePassword("");
