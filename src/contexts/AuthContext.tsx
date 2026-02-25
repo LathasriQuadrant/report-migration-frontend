@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { User } from "@/types/migration";
+import { apiFetch } from "@/lib/api";
 
 interface AuthContextType {
   user: User | null;
@@ -9,42 +10,49 @@ interface AuthContextType {
   logout: () => void;
 }
 
-const BACKEND_BASE_URL = "https://powerbi-azure-auth-app-e6dtdsb2ccawg9cy.eastus-01.azurewebsites.net";
-
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Check Azure AD authentication status by calling the backend
+  /**
+   * Calls /auth/me to get user details from the session cookie.
+   * Handles 401 (redirect) and 403 (forbidden) via apiFetch.
+   */
   const checkAuth = async (): Promise<boolean> => {
     try {
-      const response = await fetch(`${BACKEND_BASE_URL}/workspaces`, {
-        credentials: "include",
-      });
+      const response = await apiFetch("/auth/me");
 
       if (response.ok) {
-        // User is authenticated via Azure AD
-        const storedName = sessionStorage.getItem("azure_user_name");
-        const storedEmail = sessionStorage.getItem("azure_user_email");
+        const data = await response.json();
+        const mappedUser: User = {
+          id: data.oid || "1",
+          name: data.name || "User",
+          email: data.email || data.preferred_username || "",
+        };
 
-        setUser({
-          id: "1",
-          name: storedName || "User",
-          email: storedEmail || "",
-        });
+        setUser(mappedUser);
+
+        // Persist to sessionStorage for quick local checks
         sessionStorage.setItem("powerbi_authenticated", "true");
+        sessionStorage.setItem("azure_user_name", mappedUser.name);
+        sessionStorage.setItem("azure_user_email", mappedUser.email);
+
+        console.log("Auth /auth/me user:", mappedUser);
         return true;
       }
-    } catch (error) {
-      console.error("Azure AD auth check failed:", error);
+    } catch (error: any) {
+      // apiFetch already handles 401 redirect; log others
+      if (!error.message?.includes("Session expired")) {
+        console.error("Auth check failed:", error.message);
+      }
     }
 
     return false;
   };
 
-  // Check for local/session-based authentication
+  // Check for local/session-based authentication (fast, no network)
   const checkLocalAuth = (): boolean => {
     const isLocalAuth = sessionStorage.getItem("local_authenticated") === "true";
     const isPowerBIAuth = sessionStorage.getItem("powerbi_authenticated") === "true";
@@ -62,7 +70,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return false;
   };
 
-  // Check auth on mount - try local first, then Azure AD
   useEffect(() => {
     const initAuth = async () => {
       setIsLoading(true);
@@ -70,10 +77,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // First check local auth (faster, no network call)
       if (checkLocalAuth()) {
         setIsLoading(false);
+        // Still verify with backend in background
+        checkAuth();
         return;
       }
 
-      // Then check Azure AD auth
+      // Then check Azure AD auth via /auth/me
       await checkAuth();
       setIsLoading(false);
     };
@@ -86,7 +95,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem("local_authenticated");
     sessionStorage.removeItem("azure_user_name");
     sessionStorage.removeItem("azure_user_email");
-    // Optionally call backend logout endpoint
   };
 
   return (
