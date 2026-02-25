@@ -17,15 +17,8 @@ export async function apiFetch(
     credentials: "include",
   });
 
-  if (response.status === 401) {
-    // Session expired or not authenticated – clear local state & redirect
-    sessionStorage.removeItem("powerbi_authenticated");
-    sessionStorage.removeItem("azure_user_name");
-    sessionStorage.removeItem("azure_user_email");
-    sessionStorage.removeItem("local_authenticated");
-    window.location.href = "/login";
-    throw new Error("Session expired. Please log in again.");
-  }
+  // Return 401/403 responses as-is – let callers handle them gracefully
+  // (e.g. checkAuth treats 401 as "not logged in", not an error)
 
   if (response.status === 403) {
     throw new Error(
