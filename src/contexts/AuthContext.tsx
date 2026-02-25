@@ -17,25 +17,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Check Azure AD authentication status by calling the backend
+  // Check Azure AD authentication status by calling /auth/me
   const checkAuth = async (): Promise<boolean> => {
     try {
-      const response = await fetch(`${BACKEND_BASE_URL}/workspaces`, {
+      const response = await fetch(`${BACKEND_BASE_URL}/auth/me`, {
         credentials: "include",
       });
 
       if (response.ok) {
-        // User is authenticated via Azure AD
-        const storedName = sessionStorage.getItem("azure_user_name");
-        const storedEmail = sessionStorage.getItem("azure_user_email");
+        const data = await response.json();
+        console.log("Auth /auth/me response:", data);
 
-        setUser({
-          id: "1",
-          name: storedName || "User",
-          email: storedEmail || "",
-        });
+        const name = data.name || data.display_name || data.displayName || "User";
+        const email = data.email || data.mail || data.userPrincipalName || "";
+        const userId = data.id || data.oid || "1";
+
+        setUser({ id: userId, name, email });
         sessionStorage.setItem("powerbi_authenticated", "true");
+        sessionStorage.setItem("azure_user_name", name);
+        sessionStorage.setItem("azure_user_email", email);
         return true;
+      } else {
+        console.log("Auth /auth/me failed with status:", response.status);
       }
     } catch (error) {
       console.error("Azure AD auth check failed:", error);
