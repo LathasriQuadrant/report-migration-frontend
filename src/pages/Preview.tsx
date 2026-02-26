@@ -9,6 +9,7 @@ import AppLayout from "@/components/layout/AppLayout";
 
 import "powerbi-report-authoring";
 
+import { useMsal } from "@azure/msal-react"; // NEW IMPORT
 /* ----------------------------------------------------
    📍 CONFIGURATION & CONSTANTS
    ---------------------------------------------------- */
