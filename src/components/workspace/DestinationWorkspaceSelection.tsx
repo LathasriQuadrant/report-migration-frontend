@@ -184,15 +184,25 @@ const DestinationWorkspaceSelection = () => {
   const fetchCapacities = async () => {
     setIsLoadingCapacities(true);
     try {
+      console.log("Fetching capacities from:", `${BACKEND_BASE_URL}/user-capacities`);
       const response = await fetch(`${BACKEND_BASE_URL}/user-capacities`, {
         credentials: "include",
       });
+      console.log("Capacities response status:", response.status);
+      const contentType = response.headers.get("content-type");
+      console.log("Capacities response content-type:", contentType);
+
       if (response.ok) {
-        const data = await response.json();
-        const caps = data.value || data || [];
+        const rawText = await response.text();
+        console.log("Capacities raw response:", rawText);
+        const data = JSON.parse(rawText);
+        console.log("Capacities parsed data:", data);
+        const caps = Array.isArray(data) ? data : (data.value || data.capacities || []);
+        console.log("Capacities extracted array:", caps);
         setCapacities(caps);
       } else {
-        console.error("Failed to fetch capacities:", response.status);
+        const errorText = await response.text();
+        console.error("Failed to fetch capacities:", response.status, errorText);
       }
     } catch (err) {
       console.error("Error fetching capacities:", err);
