@@ -360,60 +360,79 @@ export default function PowerBIReport() {
       }
 
       try {
-        /* ---- DEBUG: Embed token request ---- */
-        console.group("🔑 DEBUG: Embed Token Request");
-        // const tokenPayload = { workspaceId, reportId, datasetId };
+        // /* ---- DEBUG: Embed token request ---- */
+        // console.group("🔑 DEBUG: Embed Token Request");
+        // // const tokenPayload = { workspaceId, reportId, datasetId };
 
-        const tokenPayload = { workspaceId, reportId, datasetId, userToken };
-        console.log("Request payload:", JSON.stringify(tokenPayload, null, 2));
+        // const tokenPayload = { workspaceId, reportId, datasetId, userToken };
+        // console.log("Request payload:", JSON.stringify(tokenPayload, null, 2));
 
-        const res = await fetch("https://visuals-json-gdfth9dsbmhrgcb0.eastus-01.azurewebsites.net/embed-token", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(tokenPayload),
-        });
+        // const res = await fetch("https://visuals-json-gdfth9dsbmhrgcb0.eastus-01.azurewebsites.net/embed-token", {
+        //   method: "POST",
+        //   headers: { "Content-Type": "application/json" },
+        //   body: JSON.stringify(tokenPayload),
+        // });
 
-        console.log("HTTP Status:", res.status, res.statusText);
-        console.log("Response Headers:");
-        res.headers.forEach((value, key) => {
-          console.log(`  ${key}: ${value}`);
-          if (
-            key.toLowerCase().includes("request") ||
-            key.toLowerCase().includes("activity") ||
-            key.toLowerCase().includes("cluster")
-          ) {
-            console.log(`  ⭐ ${key}: ${value}`);
-          }
-        });
+        // console.log("HTTP Status:", res.status, res.statusText);
+        // console.log("Response Headers:");
+        // res.headers.forEach((value, key) => {
+        //   console.log(`  ${key}: ${value}`);
+        //   if (
+        //     key.toLowerCase().includes("request") ||
+        //     key.toLowerCase().includes("activity") ||
+        //     key.toLowerCase().includes("cluster")
+        //   ) {
+        //     console.log(`  ⭐ ${key}: ${value}`);
+        //   }
+        // });
 
-        const tokenData = await res.json();
-        const { embedToken, embedUrl } = tokenData;
+        // const tokenData = await res.json();
+        // const { embedToken, embedUrl } = tokenData;
 
-        console.log("embedUrl:", embedUrl);
-        console.log("embedToken (first 50 chars):", embedToken ? embedToken.substring(0, 50) + "..." : "MISSING!");
-        console.log("embedToken type:", typeof embedToken);
-        console.log("embedToken length:", embedToken ? embedToken.length : 0);
-        console.log("Full token response keys:", Object.keys(tokenData));
-        if (tokenData.modelId) console.log("modelId from token response:", tokenData.modelId);
-        if (tokenData.datasetId) console.log("datasetId from token response:", tokenData.datasetId);
-        console.groupEnd();
+        // console.log("embedUrl:", embedUrl);
+        // console.log("embedToken (first 50 chars):", embedToken ? embedToken.substring(0, 50) + "..." : "MISSING!");
+        // console.log("embedToken type:", typeof embedToken);
+        // console.log("embedToken length:", embedToken ? embedToken.length : 0);
+        // console.log("Full token response keys:", Object.keys(tokenData));
+        // if (tokenData.modelId) console.log("modelId from token response:", tokenData.modelId);
+        // if (tokenData.datasetId) console.log("datasetId from token response:", tokenData.datasetId);
+        // console.groupEnd();
 
-        if (!embedToken) {
-          console.error("❌ CRITICAL: embedToken is missing or empty!");
-          setStatus("Embed token missing from response");
-          setStatusType("error");
-          return;
-        }
+        // if (!embedToken) {
+        //   console.error("❌ CRITICAL: embedToken is missing or empty!");
+        //   setStatus("Embed token missing from response");
+        //   setStatusType("error");
+        //   return;
+        // }
 
         if (containerRef.current) {
           pbiService.reset(containerRef.current);
 
+          // const embedConfig = {
+          //   type: "report",
+          //   id: reportId,
+          //   embedUrl,
+          //   accessToken: embedToken,
+          //   tokenType: models.TokenType.Embed,
+          //   permissions: models.Permissions.All,
+          //   viewMode: models.ViewMode.Edit,
+          //   settings: {
+          //     panes: {
+          //       fields: { visible: true, expanded: true },
+          //       visualizations: { visible: true },
+          //     },
+          //   },
+          // };
+
+          // 🚀 We build the URL manually now
+          const builtEmbedUrl = `https://app.powerbi.com/reportEmbed?reportId=${reportId}&groupId=${workspaceId}`;
+
           const embedConfig = {
             type: "report",
             id: reportId,
-            embedUrl,
-            accessToken: embedToken,
-            tokenType: models.TokenType.Embed,
+            embedUrl: builtEmbedUrl, // Added this line
+            accessToken: userToken, // Changed this line to use session storage token
+            tokenType: models.TokenType.Aad, // Changed this line to Aad
             permissions: models.Permissions.All,
             viewMode: models.ViewMode.Edit,
             settings: {
