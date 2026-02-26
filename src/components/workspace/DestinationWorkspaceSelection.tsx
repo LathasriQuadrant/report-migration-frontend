@@ -327,8 +327,9 @@ const DestinationWorkspaceSelection = () => {
       console.log("Blob folder URL:", blobFolderUrl);
       console.log("Extraction files:", extractionFiles);
 
-      const response = await fetch("https://report-uploader-awa8avchh6gqa3ad.eastus-01.azurewebsites.net/upload-report", {
+      const response = await fetch(`${BACKEND_BASE_URL}/workspaces/${selectedWorkspace.id}/auto-upload`, {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
           accept: "application/json",
