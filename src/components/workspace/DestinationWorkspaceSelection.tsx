@@ -78,7 +78,7 @@ const DestinationWorkspaceSelection = () => {
   const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
 
   // Get auth state from context
-  const { isAuthenticated, isLoading: isAuthLoading, accessToken } = useAuth();
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
 
   // Auto-upload state
   const [isUploading, setIsUploading] = useState(false);
@@ -100,9 +100,6 @@ const DestinationWorkspaceSelection = () => {
 
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces`, {
         credentials: "include",
-        headers: {
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        },
       });
 
       if (response.status === 401 || response.status === 403) {
@@ -206,7 +203,6 @@ const DestinationWorkspaceSelection = () => {
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify({
           workspace_name: newWorkspaceName.trim(),
@@ -246,7 +242,6 @@ const DestinationWorkspaceSelection = () => {
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify({
           workspace_id: workspaceId,
@@ -332,13 +327,11 @@ const DestinationWorkspaceSelection = () => {
       console.log("Blob folder URL:", blobFolderUrl);
       console.log("Extraction files:", extractionFiles);
 
-      const response = await fetch(`${BACKEND_BASE_URL}/workspaces/${selectedWorkspace.id}/auto-upload`, {
+      const response = await fetch("https://report-uploader-awa8avchh6gqa3ad.eastus-01.azurewebsites.net/upload-report", {
         method: "POST",
-        credentials: "include",
         headers: {
           "Content-Type": "application/json",
           accept: "application/json",
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify({
           workspace_id: selectedWorkspace.id,
