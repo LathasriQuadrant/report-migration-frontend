@@ -22,6 +22,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 
 import { useAuth } from "@/contexts/AuthContext";
 import { TreeNode } from "@/types/migration";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+interface PowerBICapacity {
+  id: string;
+  displayName: string;
+  state: string;
+  admins?: string[];
+  sku?: string;
+  capacityUserAccessRight?: string;
+}
 
 interface PowerBIReport {
   id: string;
@@ -79,6 +89,11 @@ const DestinationWorkspaceSelection = () => {
 
   // Get auth state from context
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
+
+  // Capacity state
+  const [capacities, setCapacities] = useState<PowerBICapacity[]>([]);
+  const [selectedCapacityId, setSelectedCapacityId] = useState<string>("");
+  const [isLoadingCapacities, setIsLoadingCapacities] = useState(false);
 
   // Auto-upload state
   const [isUploading, setIsUploading] = useState(false);
@@ -166,6 +181,26 @@ const DestinationWorkspaceSelection = () => {
     fetchWorkspaces();
   }, [isAuthenticated, isAuthLoading, navigate]);
 
+  const fetchCapacities = async () => {
+    setIsLoadingCapacities(true);
+    try {
+      const response = await fetch(`${BACKEND_BASE_URL}/user-capacities`, {
+        credentials: "include",
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const caps = data.value || data || [];
+        setCapacities(caps);
+      } else {
+        console.error("Failed to fetch capacities:", response.status);
+      }
+    } catch (err) {
+      console.error("Error fetching capacities:", err);
+    } finally {
+      setIsLoadingCapacities(false);
+    }
+  };
+
   const handleRefresh = () => fetchWorkspaces(true);
 
   const toggleExpand = (workspaceId: string, e: React.MouseEvent) => {
@@ -195,10 +230,19 @@ const DestinationWorkspaceSelection = () => {
       return;
     }
 
+    if (!selectedCapacityId) {
+      toast({
+        title: "Capacity required",
+        description: "Please select a capacity",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       setIsCreatingWorkspace(true);
 
-      const response = await fetch(`${BACKEND_BASE_URL}/workspaces`, {
+      const response = await fetch(`${BACKEND_BASE_URL}/workspaces/with-capacity`, {
         method: "POST",
         credentials: "include",
         headers: {
@@ -206,6 +250,7 @@ const DestinationWorkspaceSelection = () => {
         },
         body: JSON.stringify({
           workspace_name: newWorkspaceName.trim(),
+          capacity_id: selectedCapacityId,
         }),
       });
 
@@ -217,11 +262,12 @@ const DestinationWorkspaceSelection = () => {
 
       toast({
         title: "Workspace Created",
-        description: `Workspace "${newWorkspaceName}" created successfully`,
+        description: `Workspace "${newWorkspaceName}" created and assigned to capacity successfully`,
       });
 
       setIsCreateDialogOpen(false);
       setNewWorkspaceName("");
+      setSelectedCapacityId("");
       fetchWorkspaces(true);
     } catch (err) {
       toast({
@@ -730,24 +776,78 @@ const DestinationWorkspaceSelection = () => {
          isLoading={isUploading}
       />
 
-      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+      <Dialog open={isCreateDialogOpen} onOpenChange={(open) => {
+        setIsCreateDialogOpen(open);
+        if (open) {
+          fetchCapacities();
+          setSelectedCapacityId("");
+          setNewWorkspaceName("");
+        }
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create Power BI Workspace</DialogTitle>
           </DialogHeader>
 
-          <Input
-            placeholder="Enter workspace name"
-            value={newWorkspaceName}
-            onChange={(e) => setNewWorkspaceName(e.target.value)}
-            autoFocus
-          />
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Workspace Name</label>
+              <Input
+                placeholder="Enter workspace name"
+                value={newWorkspaceName}
+                onChange={(e) => setNewWorkspaceName(e.target.value)}
+                autoFocus
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Select Capacity</label>
+              {isLoadingCapacities ? (
+                <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading capacities...
+                </div>
+              ) : capacities.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">No capacities available.</p>
+              ) : (
+                <Select value={selectedCapacityId} onValueChange={setSelectedCapacityId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a capacity" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {capacities.map((cap) => {
+                      const hasAccess = cap.capacityUserAccessRight && cap.capacityUserAccessRight !== "None";
+                      const isActive = cap.state === "Active";
+                      const isDisabled = !hasAccess || !isActive;
+
+                      return (
+                        <SelectItem key={cap.id} value={cap.id} disabled={isDisabled}>
+                          <div className="flex flex-col">
+                            <span>{cap.displayName}{cap.sku ? ` (${cap.sku})` : ""}</span>
+                            {isDisabled && (
+                              <span className="text-xs text-muted-foreground">
+                                {!isActive ? "Inactive" : "No access"}
+                              </span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
               Cancel
             </Button>
-            <Button variant="powerbi" onClick={handleCreateWorkspace} disabled={isCreatingWorkspace}>
+            <Button
+              variant="powerbi"
+              onClick={handleCreateWorkspace}
+              disabled={isCreatingWorkspace || !selectedCapacityId || !newWorkspaceName.trim()}
+            >
               {isCreatingWorkspace ? "Creating..." : "Create"}
             </Button>
           </DialogFooter>
