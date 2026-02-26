@@ -333,199 +333,6 @@ export default function PowerBIReport() {
     }
   }
 
-  // /* ----------- EMBED REPORT ----------- */
-  // useEffect(() => {
-  //   let report: any;
-  //   if (isEmbedding.current) return;
-  //   isEmbedding.current = true;
-
-  //   async function init() {
-  //     /* ---- DEBUG: Log session data ---- */
-  //     console.group("🔍 DEBUG: Session Data");
-  //     console.log("workspaceId:", workspaceId);
-  //     console.log("reportId:", reportId);
-  //     console.log("datasetId:", datasetId);
-  //     console.log("metadataBlobUrl:", metadataBlobUrl);
-  //     console.log("rawReportName:", rawReportName);
-  //     console.groupEnd();
-
-  //     if (!workspaceId || !reportId) {
-  //       setStatus("Missing Session Data");
-  //       setStatusType("error");
-  //       return;
-  //     }
-
-  //     try {
-  //       /* ---- DEBUG: Embed token request ---- */
-  //       console.group("🔑 DEBUG: Embed Token Request");
-  //       const tokenPayload = { workspaceId, reportId, datasetId };
-  //       console.log("Request payload:", JSON.stringify(tokenPayload, null, 2));
-
-  //       const res = await fetch("https://visuals-json-gdfth9dsbmhrgcb0.eastus-01.azurewebsites.net/embed-token", {
-  //         method: "POST",
-  //         headers: { "Content-Type": "application/json" },
-  //         body: JSON.stringify(tokenPayload),
-  //       });
-
-  //       console.log("HTTP Status:", res.status, res.statusText);
-  //       console.log("Response Headers:");
-  //       res.headers.forEach((value, key) => {
-  //         console.log(`  ${key}: ${value}`);
-  //         if (key.toLowerCase().includes("request") || key.toLowerCase().includes("activity") || key.toLowerCase().includes("cluster")) {
-  //           console.log(`  ⭐ ${key}: ${value}`);
-  //         }
-  //       });
-
-  //       const tokenData = await res.json();
-  //       const { embedToken, embedUrl } = tokenData;
-
-  //       console.log("embedUrl:", embedUrl);
-  //       console.log("embedToken (first 50 chars):", embedToken ? embedToken.substring(0, 50) + "..." : "MISSING!");
-  //       console.log("embedToken type:", typeof embedToken);
-  //       console.log("embedToken length:", embedToken ? embedToken.length : 0);
-  //       console.log("Full token response keys:", Object.keys(tokenData));
-  //       if (tokenData.modelId) console.log("modelId from token response:", tokenData.modelId);
-  //       if (tokenData.datasetId) console.log("datasetId from token response:", tokenData.datasetId);
-  //       console.groupEnd();
-
-  //       if (!embedToken) {
-  //         console.error("❌ CRITICAL: embedToken is missing or empty!");
-  //         setStatus("Embed token missing from response");
-  //         setStatusType("error");
-  //         return;
-  //       }
-
-  //       if (containerRef.current) {
-  //         pbiService.reset(containerRef.current);
-
-  //         const embedConfig = {
-  //           type: "report",
-  //           id: reportId,
-  //           embedUrl,
-  //           accessToken: embedToken,
-  //           tokenType: models.TokenType.Embed,
-  //           permissions: models.Permissions.All,
-  //           viewMode: models.ViewMode.Edit,
-  //           settings: {
-  //             panes: {
-  //               fields: { visible: true, expanded: true },
-  //               visualizations: { visible: true },
-  //             },
-  //           },
-  //         };
-
-  //         console.group("📋 DEBUG: Embed Configuration");
-  //         console.log("tokenType:", models.TokenType.Embed, "(models.TokenType.Embed)");
-  //         console.log("permissions:", models.Permissions.All, "(models.Permissions.All)");
-  //         console.log("viewMode:", models.ViewMode.Edit, "(models.ViewMode.Edit)");
-  //         console.log("report id:", reportId);
-  //         console.log("Full config (token redacted):", JSON.stringify({ ...embedConfig, accessToken: "[REDACTED]" }, null, 2));
-  //         console.groupEnd();
-
-  //         report = pbiService.embed(containerRef.current, embedConfig);
-
-  //         /* ---- DEBUG: Report lifecycle events ---- */
-  //         report.on("loaded", () => {
-  //           console.log("✅ DEBUG: Report 'loaded' event fired");
-  //         });
-
-  //         report.on("rendered", () => {
-  //           console.log("📊 DEBUG: Report 'rendered' event fired");
-  //           createStaticVisuals(report);
-  //         });
-
-  //         report.on("error", (e: any) => {
-  //           console.group("❌ DEBUG: Power BI Error Event");
-  //           console.error("Full error event:", JSON.stringify(e, null, 2));
-  //           if (e.detail) {
-  //             console.error("Error detail:", JSON.stringify(e.detail, null, 2));
-  //             console.error("Message:", e.detail.message);
-  //             console.error("Error code:", e.detail.errorCode);
-  //             console.error("Level:", e.detail.level);
-  //             if (e.detail.technicalDetails) {
-  //               console.error("Technical Details:", JSON.stringify(e.detail.technicalDetails, null, 2));
-  //               console.error("  RequestId:", e.detail.technicalDetails.requestId);
-  //               console.error("  ErrorInfo:", e.detail.technicalDetails.errorInfo);
-  //             }
-  //             if (e.detail.activityId) console.error("ActivityId:", e.detail.activityId);
-  //             if (e.detail.requestId) console.error("RequestId:", e.detail.requestId);
-  //             if (e.detail.clusterUri) console.error("Cluster URI:", e.detail.clusterUri);
-  //           }
-  //           console.groupEnd();
-  //           setStatus("Power BI Error");
-  //           setStatusType("error");
-  //         });
-
-  //         report.on("dataSelected", (e: any) => {
-  //           console.log("📊 DEBUG: dataSelected event:", JSON.stringify(e, null, 2));
-  //         });
-
-  //         report.on("commandTriggered", (e: any) => {
-  //           console.log("⚡ DEBUG: commandTriggered event:", JSON.stringify(e, null, 2));
-  //         });
-
-  //         /* ---- DEBUG: Intercept network for querydata failures ---- */
-  //         const originalFetch = window.fetch;
-  //         window.fetch = async function (...args: Parameters<typeof fetch>) {
-  //           const url = typeof args[0] === "string" ? args[0] : (args[0] as Request).url;
-  //           const isQueryData = url.includes("querydata") || url.includes("QueryData") || url.includes("conceptualschema") || url.includes("explore");
-
-  //           if (isQueryData) {
-  //             console.group("🌐 DEBUG: PBI Network Request");
-  //             console.log("URL:", url);
-  //             console.log("Method:", (args[1] as RequestInit)?.method || "GET");
-  //           }
-
-  //           try {
-  //             const response = await originalFetch.apply(this, args);
-
-  //             if (isQueryData) {
-  //               console.log("Status:", response.status, response.statusText);
-  //               response.headers.forEach((value, key) => {
-  //                 if (
-  //                   key.toLowerCase().includes("requestid") ||
-  //                   key.toLowerCase().includes("activityid") ||
-  //                   key.toLowerCase().includes("x-powerbi") ||
-  //                   key.toLowerCase().includes("cluster")
-  //                 ) {
-  //                   console.log(`  Header ${key}: ${value}`);
-  //                 }
-  //               });
-
-  //               if (!response.ok) {
-  //                 console.error("⚠️ QUERY DATA FAILURE!");
-  //                 console.error("HTTP Status:", response.status);
-  //                 try {
-  //                   const cloned = response.clone();
-  //                   const errorBody = await cloned.text();
-  //                   console.error("Response Body:", errorBody);
-  //                 } catch (readErr) {
-  //                   console.error("Could not read error body:", readErr);
-  //                 }
-  //               }
-  //               console.groupEnd();
-  //             }
-
-  //             return response;
-  //           } catch (err) {
-  //             if (isQueryData) {
-  //               console.error("❌ NETWORK ERROR on querydata:", err);
-  //               console.groupEnd();
-  //             }
-  //             throw err;
-  //           }
-  //         };
-  //       }
-  //     } catch (e: any) {
-  //       console.error("❌ DEBUG: Init failed:", e);
-  //       console.error("Stack:", e.stack);
-  //       setStatus("Init failed: " + e.message);
-  //       setStatusType("error");
-  //     }
-  //   }
-  //   init();
-  // }, []);
-
   /* ----------- EMBED REPORT ----------- */
   useEffect(() => {
     let report: any;
@@ -548,51 +355,15 @@ export default function PowerBIReport() {
         return;
       }
 
-      /* ---- NEW: ACQUIRE USER TOKEN VIA MSAL ---- */
-      let userAccessToken = "";
-      setStatus("Authenticating user...");
-
-      try {
-        if (accounts.length === 0) {
-          throw new Error("No user is logged in. Please log in first.");
-        }
-
-        const tokenRequest = {
-          // ⚠️ IMPORTANT: Replace this with your actual Azure App Registration Scope
-          scopes: ["api://YOUR_BACKEND_CLIENT_ID/access_as_user"],
-          account: accounts[0],
-        };
-
-        try {
-          const tokenResponse = await instance.acquireTokenSilent(tokenRequest);
-          userAccessToken = tokenResponse.accessToken;
-        } catch (silentError) {
-          console.warn("Silent token acquisition failed, prompting popup", silentError);
-          const tokenResponse = await instance.acquireTokenPopup(tokenRequest);
-          userAccessToken = tokenResponse.accessToken;
-        }
-      } catch (authError: any) {
-        console.error("Auth error:", authError);
-        setStatus("Authentication failed: " + authError.message);
-        setStatusType("error");
-        return; // Stop execution if we cannot get the token
-      }
-
       try {
         /* ---- DEBUG: Embed token request ---- */
         console.group("🔑 DEBUG: Embed Token Request");
         const tokenPayload = { workspaceId, reportId, datasetId };
         console.log("Request payload:", JSON.stringify(tokenPayload, null, 2));
 
-        setStatus("Fetching Power BI credentials...");
-
-        // 🚀 UPDATED: Added Authorization header with the MSAL token
         const res = await fetch("https://visuals-json-gdfth9dsbmhrgcb0.eastus-01.azurewebsites.net/embed-token", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${userAccessToken}`, // The token we just generated
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(tokenPayload),
         });
 
@@ -608,10 +379,6 @@ export default function PowerBIReport() {
             console.log(`  ⭐ ${key}: ${value}`);
           }
         });
-
-        if (!res.ok) {
-          throw new Error(`Failed to fetch embed token: ${res.status} ${res.statusText}`);
-        }
 
         const tokenData = await res.json();
         const { embedToken, embedUrl } = tokenData;
@@ -768,7 +535,8 @@ export default function PowerBIReport() {
       }
     }
     init();
-  }, [accounts, instance]); // Added accounts and instance to dependency array
+  }, []);
+
   return (
     <AppLayout>
       <div className="flex flex-col gap-4 p-6 h-full">
