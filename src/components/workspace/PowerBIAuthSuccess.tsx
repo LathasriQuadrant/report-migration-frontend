@@ -20,6 +20,7 @@ const PowerBIAuthSuccess = () => {
       const email = searchParams.get("email") || "";
       const oid = searchParams.get("oid") || "";
       const tenant = searchParams.get("tenant") || "";
+      const accessToken = searchParams.get("access_token") || "";
 
       // Save user details to sessionStorage and localStorage
       sessionStorage.setItem("powerbi_authenticated", "true");
@@ -27,6 +28,7 @@ const PowerBIAuthSuccess = () => {
       sessionStorage.setItem("azure_user_email", email);
       sessionStorage.setItem("azure_user_oid", oid);
       sessionStorage.setItem("azure_user_tenant", tenant);
+      sessionStorage.setItem("access_token", accessToken);
 
       // Also save to localStorage to notify other tabs (Login polling)
       localStorage.setItem("powerbi_authenticated", "true");
