@@ -18,15 +18,19 @@ const PowerBIAuthSuccess = () => {
       // Extract user profile from query parameters
       const name = searchParams.get("name") || "User";
       const email = searchParams.get("email") || "";
+      const oid = searchParams.get("oid") || "";
+      const tenant = searchParams.get("tenant") || "";
 
       // Save user details to sessionStorage and localStorage
       sessionStorage.setItem("powerbi_authenticated", "true");
       sessionStorage.setItem("azure_user_name", name);
       sessionStorage.setItem("azure_user_email", email);
+      sessionStorage.setItem("azure_user_oid", oid);
+      sessionStorage.setItem("azure_user_tenant", tenant);
 
       // Also save to localStorage to notify other tabs (Login polling)
       localStorage.setItem("powerbi_authenticated", "true");
-      localStorage.setItem("user_details", JSON.stringify({ name, email }));
+      localStorage.setItem("user_details", JSON.stringify({ name, email, oid, tenant }));
 
       // Try to verify with backend, but don't block on failure
       await checkAuth();

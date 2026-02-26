@@ -28,9 +28,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // User is authenticated via Azure AD
         const storedName = sessionStorage.getItem("azure_user_name");
         const storedEmail = sessionStorage.getItem("azure_user_email");
+        const storedOid = sessionStorage.getItem("azure_user_oid");
 
         setUser({
-          id: "1",
+          id: storedOid || "1",
           name: storedName || "User",
           email: storedEmail || "",
         });
@@ -51,9 +52,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (isLocalAuth || isPowerBIAuth) {
       const storedName = sessionStorage.getItem("azure_user_name");
       const storedEmail = sessionStorage.getItem("azure_user_email");
+      const storedOid = sessionStorage.getItem("azure_user_oid");
 
       setUser({
-        id: "1",
+        id: storedOid || "1",
         name: storedName || "User",
         email: storedEmail || "",
       });
@@ -86,6 +88,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem("local_authenticated");
     sessionStorage.removeItem("azure_user_name");
     sessionStorage.removeItem("azure_user_email");
+    sessionStorage.removeItem("azure_user_oid");
+    sessionStorage.removeItem("azure_user_tenant");
     // Optionally call backend logout endpoint
   };
 
