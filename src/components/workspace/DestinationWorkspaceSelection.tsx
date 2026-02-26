@@ -259,11 +259,13 @@ const DestinationWorkspaceSelection = () => {
       console.log("Creating workspace with payload:", JSON.stringify(payload));
       console.log("POST URL:", `${BACKEND_BASE_URL}/workspaces/with-capacity`);
 
+      const accessToken = sessionStorage.getItem("access_token");
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces/with-capacity`, {
         method: "POST",
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
+          ...(accessToken ? { "Authorization": `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify(payload),
       });
