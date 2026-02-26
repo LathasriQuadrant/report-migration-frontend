@@ -51,6 +51,8 @@ export default function PowerBIReport() {
   const metadataBlobUrl = sessionStorage.getItem("metadataOutputBlobUrl");
   const rawReportName = sessionStorage.getItem("report_name") || "sampletbl";
 
+  const userToken = sessionStorage.getItem("access_token");
+
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
   /* ----------- DATA MAPPING HELPERS ----------- */
@@ -346,8 +348,13 @@ export default function PowerBIReport() {
       console.log("rawReportName:", rawReportName);
       console.groupEnd();
 
-      if (!workspaceId || !reportId) {
-        setStatus("Missing Session Data");
+      // if (!workspaceId || !reportId) {
+      //   setStatus("Missing Session Data");
+      //   setStatusType("error");
+      //   return;
+      // }
+      if (!workspaceId || !reportId || !userToken) {
+        setStatus("Missing Session Data or Auth Token");
         setStatusType("error");
         return;
       }
@@ -355,7 +362,9 @@ export default function PowerBIReport() {
       try {
         /* ---- DEBUG: Embed token request ---- */
         console.group("🔑 DEBUG: Embed Token Request");
-        const tokenPayload = { workspaceId, reportId, datasetId };
+        // const tokenPayload = { workspaceId, reportId, datasetId };
+
+        const tokenPayload = { workspaceId, reportId, datasetId, userToken };
         console.log("Request payload:", JSON.stringify(tokenPayload, null, 2));
 
         const res = await fetch("https://visuals-json-gdfth9dsbmhrgcb0.eastus-01.azurewebsites.net/embed-token", {
