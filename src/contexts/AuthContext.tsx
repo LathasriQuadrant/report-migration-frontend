@@ -6,7 +6,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   checkAuth: () => Promise<boolean>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const BACKEND_BASE_URL = "https://accesstokens-aecjbzaqaqcuh6bd.eastus-01.azurewebsites.net";
@@ -20,21 +20,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Check Azure AD authentication status by calling the backend
   const checkAuth = async (): Promise<boolean> => {
     try {
-      const response = await fetch(`${BACKEND_BASE_URL}/workspaces`, {
+      const response = await fetch(`${BACKEND_BASE_URL}/auth/me`, {
         credentials: "include",
       });
 
       if (response.ok) {
-        // User is authenticated via Azure AD
-        const storedName = sessionStorage.getItem("azure_user_name");
-        const storedEmail = sessionStorage.getItem("azure_user_email");
-
+        const data = await response.json();
         setUser({
-          id: "1",
-          name: storedName || "User",
-          email: storedEmail || "",
+          id: data.oid || "1",
+          name: data.name || sessionStorage.getItem("azure_user_name") || "User",
+          email: data.email || sessionStorage.getItem("azure_user_email") || "",
         });
+        // Persist for local checks
         sessionStorage.setItem("powerbi_authenticated", "true");
+        sessionStorage.setItem("azure_user_name", data.name || "User");
+        sessionStorage.setItem("azure_user_email", data.email || "");
         return true;
       }
     } catch (error) {
@@ -80,13 +80,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initAuth();
   }, []);
 
-  const logout = () => {
+  const logout = async () => {
+    // Call backend logout to clear server session
+    try {
+      await fetch(`${BACKEND_BASE_URL}/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch (error) {
+      console.error("Backend logout failed:", error);
+    }
     setUser(null);
     sessionStorage.removeItem("powerbi_authenticated");
     sessionStorage.removeItem("local_authenticated");
     sessionStorage.removeItem("azure_user_name");
     sessionStorage.removeItem("azure_user_email");
-    // Optionally call backend logout endpoint
   };
 
   return (
