@@ -20,9 +20,8 @@ const Login = () => {
     }
   }, [isAuthenticated, navigate]);
 
-  // Check if auth completed via backend or localStorage (cross-tab)
-  const checkAuthCompletion = useCallback(async () => {
-    // First check localStorage (set by PowerBIAuthSuccess in the popup)
+  // Check if auth completed via localStorage first; fallback to backend only when explicitly allowed
+  const checkAuthCompletion = useCallback(async (allowBackendFallback = false) => {
     const localAuth = localStorage.getItem("powerbi_authenticated");
     if (localAuth === "true") {
       const userDetails = localStorage.getItem("user_details");
@@ -32,7 +31,7 @@ const Login = () => {
         sessionStorage.setItem("azure_user_name", name || "User");
         sessionStorage.setItem("azure_user_email", email || "");
       }
-      // Clean up localStorage flags
+
       localStorage.removeItem("powerbi_authenticated");
       localStorage.removeItem("user_details");
       await checkAuth();
@@ -40,7 +39,8 @@ const Login = () => {
       return true;
     }
 
-    // Fallback: try backend session check
+    if (!allowBackendFallback) return false;
+
     const isAuthed = await checkAuth();
     if (isAuthed) {
       navigate("/dashboard", { replace: true });
@@ -64,23 +64,31 @@ const Login = () => {
   useEffect(() => {
     if (!isWaiting) return;
 
+    // Popup blocked or failed to open: stop waiting immediately.
+    if (!loginWindow) {
+      setIsWaiting(false);
+      return;
+    }
+
     const interval = setInterval(async () => {
-      if (loginWindow && loginWindow.closed) {
-        const isAuthed = await checkAuthCompletion();
+      // While popup is open, only check cross-tab localStorage flag (no backend polling).
+      const isAuthedFromStorage = await checkAuthCompletion(false);
+      if (isAuthedFromStorage) {
+        loginWindow.close();
+        clearInterval(interval);
+        return;
+      }
+
+      // Once popup is closed, do one backend fallback verification.
+      if (loginWindow.closed) {
+        const isAuthed = await checkAuthCompletion(true);
         if (!isAuthed) {
           setIsWaiting(false);
           setLoginWindow(null);
         }
         clearInterval(interval);
-        return;
       }
-
-      const isAuthed = await checkAuthCompletion();
-      if (isAuthed) {
-        loginWindow?.close();
-        clearInterval(interval);
-      }
-    }, 2000);
+    }, 1500);
 
     return () => clearInterval(interval);
   }, [isWaiting, loginWindow, checkAuthCompletion]);
@@ -88,6 +96,12 @@ const Login = () => {
   const handleAzureSignIn = () => {
     setIsWaiting(true);
     const newWindow = window.open(LOGIN_URL, "_blank", "noopener");
+
+    if (!newWindow) {
+      setIsWaiting(false);
+      return;
+    }
+
     setLoginWindow(newWindow);
   };
 
