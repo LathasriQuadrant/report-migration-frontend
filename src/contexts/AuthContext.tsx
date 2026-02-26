@@ -45,12 +45,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Check Azure AD authentication status by calling the backend
   const checkAuth = async (): Promise<boolean> => {
     try {
+      console.log("[Auth] Calling /auth/me...");
       const response = await fetch(`${BACKEND_BASE_URL}/auth/me`, {
         credentials: "include",
       });
 
       if (response.ok) {
         const data = await response.json();
+        console.log("[Auth] /auth/me success:", data);
         setUser({
           id: data.oid || "1",
           name: data.name || sessionStorage.getItem("azure_user_name") || "User",
@@ -62,8 +64,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         sessionStorage.setItem("azure_user_email", data.email || "");
 
         // Fetch and store access token
-        await fetchAccessToken();
+        console.log("[Auth] Now calling /auth/token...");
+        const token = await fetchAccessToken();
+        console.log("[Auth] Token fetched:", token ? "yes" : "no");
         return true;
+      } else {
+        console.log("[Auth] /auth/me failed with status:", response.status);
       }
     } catch (error) {
       console.error("Azure AD auth check failed:", error);
