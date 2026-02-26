@@ -252,19 +252,26 @@ const DestinationWorkspaceSelection = () => {
     try {
       setIsCreatingWorkspace(true);
 
+      const payload = {
+        workspace_name: newWorkspaceName.trim(),
+        capacity_id: selectedCapacityId,
+      };
+      console.log("Creating workspace with payload:", JSON.stringify(payload));
+      console.log("POST URL:", `${BACKEND_BASE_URL}/workspaces/with-capacity`);
+
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces/with-capacity`, {
         method: "POST",
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          workspace_name: newWorkspaceName.trim(),
-          capacity_id: selectedCapacityId,
-        }),
+        body: JSON.stringify(payload),
       });
 
-      const result = await response.json();
+      console.log("Create workspace response status:", response.status);
+      const rawText = await response.text();
+      console.log("Create workspace raw response:", rawText);
+      const result = rawText ? JSON.parse(rawText) : {};
 
       if (!response.ok) {
         throw new Error(result.detail || "Failed to create workspace");
