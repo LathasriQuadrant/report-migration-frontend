@@ -568,7 +568,12 @@ const DestinationWorkspaceSelection = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="powerbi" size="sm" onClick={() => setIsCreateDialogOpen(true)}>
+            <Button variant="powerbi" size="sm" onClick={() => {
+              setIsCreateDialogOpen(true);
+              fetchCapacities();
+              setSelectedCapacityId("");
+              setNewWorkspaceName("");
+            }}>
               + Create Workspace
             </Button>
 
