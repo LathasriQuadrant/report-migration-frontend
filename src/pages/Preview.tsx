@@ -9,7 +9,6 @@ import AppLayout from "@/components/layout/AppLayout";
 
 import "powerbi-report-authoring";
 
-import { useMsal } from "@azure/msal-react"; // NEW IMPORT
 /* ----------------------------------------------------
    📍 CONFIGURATION & CONSTANTS
    ---------------------------------------------------- */
@@ -36,8 +35,6 @@ interface ApiVisual {
 
 export default function PowerBIReport() {
   const navigate = useNavigate();
-
-  const { instance, accounts } = useMsal(); //for new token
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState("Initializing...");
