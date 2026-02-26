@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Shield, Zap, Clock, ArrowLeft, ExternalLink, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
-const BACKEND_BASE_URL = "https://accesstokens-aecjbzaqaqcuh6bd.eastus-01.azurewebsites.net";
+const BACKEND_BASE_URL = "https://powerbi-azure-auth-app-e6dtdsb2ccawg9cy.eastus-01.azurewebsites.net";
 const LOGIN_URL = `${BACKEND_BASE_URL}/login`;
 
 const Login = () => {

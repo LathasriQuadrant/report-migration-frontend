@@ -9,7 +9,7 @@ interface AuthContextType {
   logout: () => void;
 }
 
-const BACKEND_BASE_URL = "https://accesstokens-aecjbzaqaqcuh6bd.eastus-01.azurewebsites.net";
+const BACKEND_BASE_URL = "https://powerbi-azure-auth-app-e6dtdsb2ccawg9cy.eastus-01.azurewebsites.net";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
