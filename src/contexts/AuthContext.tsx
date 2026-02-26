@@ -5,6 +5,7 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  accessToken: string | null;
   checkAuth: () => Promise<boolean>;
   logout: () => Promise<void>;
 }
@@ -16,6 +17,30 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [accessToken, setAccessToken] = useState<string | null>(
+    sessionStorage.getItem("access_token")
+  );
+
+  // Fetch access token from /auth/token
+  const fetchAccessToken = async (): Promise<string | null> => {
+    try {
+      const res = await fetch(`${BACKEND_BASE_URL}/auth/token`, {
+        credentials: "include",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const token = data.access_token || data.token || null;
+        if (token) {
+          setAccessToken(token);
+          sessionStorage.setItem("access_token", token);
+        }
+        return token;
+      }
+    } catch (error) {
+      console.error("Failed to fetch access token:", error);
+    }
+    return null;
+  };
 
   // Check Azure AD authentication status by calling the backend
   const checkAuth = async (): Promise<boolean> => {
@@ -35,6 +60,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         sessionStorage.setItem("powerbi_authenticated", "true");
         sessionStorage.setItem("azure_user_name", data.name || "User");
         sessionStorage.setItem("azure_user_email", data.email || "");
+
+        // Fetch and store access token
+        await fetchAccessToken();
         return true;
       }
     } catch (error) {
@@ -91,6 +119,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error("Backend logout failed:", error);
     }
     setUser(null);
+    setAccessToken(null);
+    sessionStorage.removeItem("access_token");
     sessionStorage.removeItem("powerbi_authenticated");
     sessionStorage.removeItem("local_authenticated");
     sessionStorage.removeItem("azure_user_name");
@@ -98,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, checkAuth, logout }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, accessToken, checkAuth, logout }}>
       {children}
     </AuthContext.Provider>
   );
