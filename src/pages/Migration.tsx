@@ -207,51 +207,45 @@ export default function Migration() {
             break;
           }
 
-          // Check if password is required
-          const isPasswordError =
-            !lakehouseRes.ok &&
-            (lakehouseData.detail?.toLowerCase().includes("password") ||
-              lakehouseData.message?.toLowerCase().includes("password"));
-
-          if (isPasswordError) {
-            log("Lakehouse requires password, prompting user…");
-            updateStep(2, "running", "Password required – waiting for input…");
-
-            const password = await promptForPassword();
-            if (!password) {
-              throw new Error("Password entry cancelled by user");
-            }
-
-            // Retry with password
-            updateStep(2, "running", "Retrying Lakehouse migration with password…");
-            lakehouseBody.password = password;
-            const retryRes = await fetch(LAKEHOUSE_URL, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", accept: "application/json" },
-              body: JSON.stringify(lakehouseBody),
-            });
-            try {
-              lakehouseData = await retryRes.json();
-            } catch {
-              lakehouseData = {};
-            }
-
-            if (retryRes.ok && lakehouseData.status === "success") {
-              lakehouseSuccess = true;
-              break;
-            }
-            throw new Error(lakehouseData.detail || lakehouseData.message || "Lakehouse migration failed with password");
-          }
-
-          // Non-password error – retry with backoff
+          // Non-success: retry up to MAX_RETRIES
+          const errMsg = lakehouseData.detail || lakehouseData.message || `Status ${lakehouseRes.status}`;
           if (attempt < MAX_RETRIES) {
             const backoff = 2000 * Math.pow(2, attempt - 1);
-            const errMsg = lakehouseData.detail || lakehouseData.message || `Status ${lakehouseRes.status}`;
             log(`Attempt ${attempt} failed: ${errMsg}. Retrying in ${backoff / 1000}s…`);
             updateStep(2, "running", `Error: ${errMsg}. Retrying in ${backoff / 1000}s…`);
             await delay(backoff);
+          }
+        }
+
+        // After 2 failed attempts, ask for password and re-hit once with password
+        if (!lakehouseSuccess) {
+          log("Lakehouse failed after retries, prompting for password…");
+          updateStep(2, "running", "Authentication may be required – waiting for password…");
+
+          const password = await promptForPassword();
+          if (!password) {
+            throw new Error("Password entry cancelled by user");
+          }
+
+          lakehouseBody.password = password;
+          updateStep(2, "running", "Retrying Lakehouse migration with password…");
+
+          const retryRes = await fetch(LAKEHOUSE_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", accept: "application/json" },
+            body: JSON.stringify(lakehouseBody),
+          });
+
+          try {
+            lakehouseData = await retryRes.json();
+          } catch {
+            lakehouseData = {};
+          }
+
+          if (retryRes.ok && lakehouseData.status === "success") {
+            lakehouseSuccess = true;
           } else {
-            throw new Error(lakehouseData.detail || lakehouseData.message || `Lakehouse migration failed after ${MAX_RETRIES} attempts`);
+            throw new Error(lakehouseData.detail || lakehouseData.message || "Lakehouse migration failed with password");
           }
         }
 
