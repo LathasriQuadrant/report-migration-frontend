@@ -26,7 +26,8 @@ const stepIcon = (s: MigrationStatus) => {
   return <Circle className="text-gray-400" />;
 };
 
-const LAKEHOUSE_URL = "https://live-data-lakehouse-erbghyatb6f4awgf.eastus-01.azurewebsites.net/api/v1/lakehouse/migrate";
+const LAKEHOUSE_URL =
+  "https://live-data-lakehouse-erbghyatb6f4awgf.eastus-01.azurewebsites.net/api/v1/lakehouse/migrate";
 const DEPLOY_URL = "https://xmla-semanticmodel-b8gbc7b0daape3fb.eastus-01.azurewebsites.net/api/Deploy";
 
 export default function Migration() {
@@ -53,6 +54,26 @@ export default function Migration() {
 
   const updateStep = (index: number, status: MigrationStatus, desc?: string) => {
     setSteps((prev) => prev.map((s, i) => (i === index ? { ...s, status, description: desc ?? s.description } : s)));
+  };
+
+  // Helper to mark job as failed in the DB if this page crashes
+  const updateJobToFailed = async (errorMessage: string) => {
+    const currentJobId = sessionStorage.getItem("current_migration_job_id");
+    if (currentJobId) {
+      try {
+        await fetch(`https://databasemanagement-e0e0d7bqhdg3gec7.eastus-01.azurewebsites.net/jobs/${currentJobId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            MigrationStatus: "Failed",
+            ErrorMessage: errorMessage,
+            CompletedAt: new Date().toISOString(),
+          }),
+        });
+      } catch (e) {
+        console.error("Could not update database with failure status:", e);
+      }
+    }
   };
 
   // Prompt user for password and return it (or null if cancelled)
@@ -82,7 +103,7 @@ export default function Migration() {
   };
 
   /* ============================================================
-      Migration Orchestrator
+     Migration Orchestrator
   ============================================================ */
   useEffect(() => {
     if (!reportName || !nodeInfo) return;
@@ -154,6 +175,7 @@ export default function Migration() {
         log("Step 1 error: " + err.message);
         updateStep(0, "failed", err.message);
         setFatalError(err.message);
+        await updateJobToFailed(err.message); // <-- UPDATE DB
         return;
       }
 
@@ -262,6 +284,7 @@ export default function Migration() {
         log("Step 3 error: " + err.message);
         updateStep(2, "failed", err.message);
         setFatalError(err.message);
+        await updateJobToFailed(err.message); // <-- UPDATE DB
         return;
       }
 
@@ -331,7 +354,12 @@ export default function Migration() {
       </div>
 
       {/* Lakehouse Password Dialog */}
-      <Dialog open={showPasswordDialog} onOpenChange={(open) => { if (!open) handlePasswordCancel(); }}>
+      <Dialog
+        open={showPasswordDialog}
+        onOpenChange={(open) => {
+          if (!open) handlePasswordCancel();
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Password Required</DialogTitle>
@@ -345,7 +373,9 @@ export default function Migration() {
             value={lakehousePassword}
             onChange={(e) => setLakehousePassword(e.target.value)}
             autoFocus
-            onKeyDown={(e) => { if (e.key === "Enter") handlePasswordSubmit(); }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handlePasswordSubmit();
+            }}
           />
           <DialogFooter>
             <Button variant="outline" onClick={handlePasswordCancel}>
