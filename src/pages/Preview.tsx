@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as models from "powerbi-models";
 import { service, factories } from "powerbi-client";
-import { Loader2, CheckCircle2, XCircle, Globe, AlertTriangle, ArrowLeft, Clock } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, Globe, AlertTriangle, ArrowLeft, Clock, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,6 +50,7 @@ export default function PowerBIReport() {
   const [intervalMode, setIntervalMode] = useState<"preset" | "custom">("preset");
   const [intervalMinutes, setIntervalMinutes] = useState("30");
   const [scheduling, setScheduling] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const isEmbedding = useRef(false);
   const executed = useRef(false);
@@ -92,6 +93,28 @@ export default function PowerBIReport() {
       toast({ title: "Schedule failed", description: err.message, variant: "destructive" });
     } finally {
       setScheduling(false);
+    }
+  };
+
+  const handleRefreshNow = async () => {
+    const workbookName = rawReportName;
+    setRefreshing(true);
+    try {
+      const res = await fetch(`${LAKEHOUSE_API}/refresh/${encodeURIComponent(workbookName)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || `HTTP ${res.status}`);
+      }
+
+      toast({ title: "Refresh triggered", description: `Refresh started for "${workbookName}".` });
+    } catch (err: any) {
+      toast({ title: "Refresh failed", description: err.message, variant: "destructive" });
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -633,9 +656,13 @@ export default function PowerBIReport() {
           </div>
         </div>
 
-        {/* Schedule Refresh Button - shown after success */}
+        {/* Refresh Buttons - shown after success */}
         {statusType === "success" && (
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            <Button onClick={handleRefreshNow} disabled={refreshing} variant="outline" className="gap-2">
+              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+              {refreshing ? "Refreshing..." : "Refresh Now"}
+            </Button>
             <Button onClick={() => setScheduleOpen(true)} className="gap-2">
               <Clock className="h-4 w-4" />
               Schedule Refresh
