@@ -745,10 +745,32 @@ const DestinationWorkspaceSelection = () => {
                       const isActive = cap.state === "Active";
                       const isDisabled = !hasAccess || !isActive;
 
+                      const skuLabelMap: Record<string, string> = {
+                        F2: "Fabric Capacity",
+                        F4: "Fabric Capacity",
+                        F8: "Fabric Capacity",
+                        F16: "Fabric Capacity",
+                        F32: "Fabric Capacity",
+                        F64: "Fabric Capacity",
+                        F128: "Fabric Capacity",
+                        F256: "Fabric Capacity",
+                        F512: "Fabric Capacity",
+                        F1024: "Fabric Capacity",
+                        F2048: "Fabric Capacity",
+                        FTL64: "Trial Fabric",
+                        PP3: "Premium Per User",
+                        P1: "Premium Capacity",
+                        P2: "Premium Capacity",
+                        P3: "Premium Capacity",
+                        P4: "Premium Capacity",
+                        P5: "Premium Capacity",
+                      };
+                      const skuLabel = cap.sku ? (skuLabelMap[cap.sku] || cap.sku) : "";
+
                       return (
                         <SelectItem key={cap.id} value={cap.id} disabled={isDisabled}>
                           <div className="flex flex-col">
-                            <span>{cap.displayName}{cap.sku ? ` (${cap.sku})` : ""}</span>
+                            <span>{cap.displayName}{skuLabel ? ` (${skuLabel})` : ""}</span>
                             {isDisabled && (
                               <span className="text-xs text-muted-foreground">
                                 {!isActive ? "Inactive" : "No access"}
