@@ -2,7 +2,9 @@ import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { CheckCircle2, Circle, Loader2, XCircle, ArrowLeft, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import AppLayout from "@/components/layout/AppLayout";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { MigrationStep, MigrationStatus } from "@/types/migration";
 import { cn } from "@/lib/utils";
 
@@ -24,11 +26,15 @@ const stepIcon = (s: MigrationStatus) => {
   return <Circle className="text-gray-400" />;
 };
 
+const LAKEHOUSE_URL = "https://live-data-lakehouse-erbghyatb6f4awgf.eastus-01.azurewebsites.net/api/v1/lakehouse/migrate";
+const DEPLOY_URL = "https://xmla-semanticmodel-b8gbc7b0daape3fb.eastus-01.azurewebsites.net/api/Deploy";
+
 export default function Migration() {
   const navigate = useNavigate();
   const location = useLocation();
 
   const nodeInfo = location.state?.node;
+  const workspace = location.state?.workspace;
   const raw = sessionStorage.getItem("selected_workbook");
   const selectedWorkbook = raw ? JSON.parse(raw) : null;
   const reportName: string | undefined = selectedWorkbook?.name;
@@ -37,13 +43,43 @@ export default function Migration() {
   const [fatalError, setFatalError] = useState<string | null>(null);
   const [isComplete, setIsComplete] = useState(false);
 
+  // Password dialog state for lakehouse
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [lakehousePassword, setLakehousePassword] = useState("");
+  const [isRetryingLakehouse, setIsRetryingLakehouse] = useState(false);
+  const [passwordResolve, setPasswordResolve] = useState<((password: string | null) => void) | null>(null);
+
   const log = (msg: string) => console.log(`[Migration] ${msg}`);
 
   const updateStep = (index: number, status: MigrationStatus, desc?: string) => {
     setSteps((prev) => prev.map((s, i) => (i === index ? { ...s, status, description: desc ?? s.description } : s)));
   };
 
-  /* Auto-complete orchestrator */
+  // Prompt user for password and return it (or null if cancelled)
+  const promptForPassword = (): Promise<string | null> => {
+    return new Promise((resolve) => {
+      setPasswordResolve(() => resolve);
+      setShowPasswordDialog(true);
+    });
+  };
+
+  const handlePasswordSubmit = () => {
+    if (passwordResolve) {
+      passwordResolve(lakehousePassword.trim() || null);
+      setPasswordResolve(null);
+    }
+    setShowPasswordDialog(false);
+    setLakehousePassword("");
+  };
+
+  const handlePasswordCancel = () => {
+    if (passwordResolve) {
+      passwordResolve(null);
+      setPasswordResolve(null);
+    }
+    setShowPasswordDialog(false);
+    setLakehousePassword("");
+  };
 
   /* ============================================================
       Migration Orchestrator
@@ -52,13 +88,58 @@ export default function Migration() {
     if (!reportName || !nodeInfo) return;
 
     const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const workspaceId = workspace?.id || sessionStorage.getItem("workspace_id") || "";
+    const workspaceName = workspace?.name || sessionStorage.getItem("workspace_name") || "";
 
     const run = async () => {
-      // Step 1 – Metadata Extraction (real API call)
-      updateStep(0, "running", "Extracting metadata…");
+      // ── Step 1 – Metadata Extraction (3 real API calls) ──
+      updateStep(0, "running", "Parsing workbook…");
       try {
-        const metadataUrl = `https://relationship-e4hraba6bxg3h6bc.eastus-01.azurewebsites.net/extract-metadata?folder_name=${encodeURIComponent(reportName)}`;
-        const metaRes = await fetch(metadataUrl, { method: "POST" });
+        // 1a) Parse workbook
+        const filename = reportName.replace(/\.twbx$/i, "");
+        const parseRes = await fetch(
+          `https://tomgenerator-b0e2byeyhmc5caht.eastus-01.azurewebsites.net/parse/${encodeURIComponent(filename)}`,
+          { method: "POST", headers: { accept: "application/json" } },
+        );
+        if (!parseRes.ok) throw new Error(`Parse failed (${parseRes.status})`);
+        const parseData = await parseRes.json();
+        console.log("Parse response:", parseData);
+        sessionStorage.setItem("parsed_workbook_data", JSON.stringify(parseData));
+        updateStep(0, "running", "Uploading report…");
+
+        // 1b) Upload report
+        const uploadRes = await fetch(
+          "https://report-uploader-awa8avchh6gqa3ad.eastus-01.azurewebsites.net/upload-report",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", accept: "application/json" },
+            body: JSON.stringify({ workspace_id: workspaceId, report_name: reportName }),
+          },
+        );
+        if (!uploadRes.ok) throw new Error(`Upload report failed (${uploadRes.status})`);
+        const uploadResult = await uploadRes.json();
+        console.log("Upload report response:", uploadResult);
+
+        // Store upload response in sessionStorage (same keys as before)
+        sessionStorage.setItem("upload_response", JSON.stringify(uploadResult));
+        sessionStorage.setItem("upload_message", uploadResult.message || "");
+        sessionStorage.setItem("upload_workspace_id", uploadResult.workspace_id || workspaceId);
+        sessionStorage.setItem("upload_report_name", uploadResult.report_name || reportName);
+        sessionStorage.setItem("upload_report_id", uploadResult.report_id || "");
+        sessionStorage.setItem("upload_dataset_id", uploadResult.dataset_id || "");
+        // Legacy keys
+        sessionStorage.setItem("report_name", uploadResult.report_name || reportName);
+        sessionStorage.setItem("report_id", uploadResult.report_id || "");
+        sessionStorage.setItem("workspace_id", uploadResult.workspace_id || workspaceId);
+        sessionStorage.setItem("workspace_name", workspaceName);
+
+        updateStep(0, "running", "Extracting metadata…");
+
+        // 1c) Extract metadata
+        const metaRes = await fetch(
+          `https://relationship-e4hraba6bxg3h6bc.eastus-01.azurewebsites.net/extract-metadata?folder_name=${encodeURIComponent(reportName)}`,
+          { method: "POST" },
+        );
         if (!metaRes.ok) throw new Error(`Metadata extraction failed (${metaRes.status})`);
         const metaData = await metaRes.json();
         console.log("Metadata extraction response:", metaData);
@@ -67,20 +148,110 @@ export default function Migration() {
           sessionStorage.setItem("metadataOutputBlobUrl", metaData.outputBlobUrl);
           console.log("Stored metadataOutputBlobUrl:", metaData.outputBlobUrl);
         }
+
         updateStep(0, "completed", "Metadata Extraction completed");
       } catch (err: any) {
-        log("Metadata extraction error: " + err.message);
+        log("Step 1 error: " + err.message);
         updateStep(0, "failed", err.message);
         setFatalError(err.message);
         return;
       }
 
-      // Steps 2–5 auto-complete
-      for (let i = 1; i < steps.length; i++) {
-        updateStep(i, "running", "Processing…");
-        await delay(1200);
-        updateStep(i, "completed", initialSteps[i].name + " completed");
+      // ── Step 2 – Artifact Generation (auto-complete) ──
+      updateStep(1, "running", "Processing…");
+      await delay(1200);
+      updateStep(1, "completed", "Artifact Generation completed");
+
+      // ── Step 3 – Dataset & Report Creation (2 real API calls) ──
+      updateStep(2, "running", "Migrating to Lakehouse…");
+      try {
+        const fileName = `${reportName}.twbx`;
+
+        // 3a) Lakehouse migrate
+        const lakehouseBody: Record<string, string> = { file_name: fileName, workspace_id: workspaceId };
+        let lakehouseRes = await fetch(LAKEHOUSE_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", accept: "application/json" },
+          body: JSON.stringify(lakehouseBody),
+        });
+        let lakehouseData = await lakehouseRes.json();
+
+        // Check if password is required
+        if (
+          !lakehouseRes.ok &&
+          (lakehouseData.detail?.toLowerCase().includes("password") ||
+            lakehouseData.message?.toLowerCase().includes("password"))
+        ) {
+          log("Lakehouse requires password, prompting user…");
+          updateStep(2, "running", "Password required – waiting for input…");
+
+          const password = await promptForPassword();
+          if (!password) {
+            throw new Error("Password entry cancelled by user");
+          }
+
+          // Retry with password
+          updateStep(2, "running", "Retrying Lakehouse migration…");
+          lakehouseBody.password = password;
+          lakehouseRes = await fetch(LAKEHOUSE_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", accept: "application/json" },
+            body: JSON.stringify(lakehouseBody),
+          });
+          lakehouseData = await lakehouseRes.json();
+        }
+
+        if (!lakehouseRes.ok || lakehouseData.status !== "success") {
+          throw new Error(lakehouseData.detail || lakehouseData.message || "Lakehouse migration failed");
+        }
+
+        console.log("Lakehouse migration successful:", lakehouseData);
+        sessionStorage.setItem("lakehouse_response", JSON.stringify(lakehouseData));
+
+        // 3b) Deploy semantic model
+        updateStep(2, "running", "Deploying semantic model…");
+        const parsedRaw = sessionStorage.getItem("parsed_workbook_data");
+        const modelSchema = parsedRaw ? JSON.parse(parsedRaw) : {};
+
+        const deployPayload = {
+          workspaceName,
+          lakehouseServer: lakehouseData.sql_endpoint_connection,
+          lakehouseDatabase: lakehouseData.lakehouse_name,
+          modelSchema,
+        };
+        console.log("Deploy payload:", deployPayload);
+
+        const deployRes = await fetch(DEPLOY_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", accept: "application/json" },
+          body: JSON.stringify(deployPayload),
+        });
+        const deployData = await deployRes.json();
+        console.log("Deploy response:", deployData);
+        sessionStorage.setItem("deploy_response", JSON.stringify(deployData));
+
+        if (!deployRes.ok) {
+          throw new Error(deployData.detail || deployData.message || "Semantic model deployment failed");
+        }
+
+        updateStep(2, "completed", "Dataset & Report Creation completed");
+      } catch (err: any) {
+        log("Step 3 error: " + err.message);
+        updateStep(2, "failed", err.message);
+        setFatalError(err.message);
+        return;
       }
+
+      // ── Step 4 – Deployment (auto-complete) ──
+      updateStep(3, "running", "Processing…");
+      await delay(1200);
+      updateStep(3, "completed", "Deployment completed");
+
+      // ── Step 5 – Validation (auto-complete) ──
+      updateStep(4, "running", "Validating…");
+      await delay(1200);
+      updateStep(4, "completed", "Validation completed");
+
       log("Migration flow completed");
       setIsComplete(true);
     };
@@ -135,6 +306,34 @@ export default function Migration() {
           </Button>
         </div>
       </div>
+
+      {/* Lakehouse Password Dialog */}
+      <Dialog open={showPasswordDialog} onOpenChange={(open) => { if (!open) handlePasswordCancel(); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Password Required</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            The data source requires authentication. Please enter the password to continue the migration.
+          </p>
+          <Input
+            type="password"
+            placeholder="Enter password"
+            value={lakehousePassword}
+            onChange={(e) => setLakehousePassword(e.target.value)}
+            autoFocus
+            onKeyDown={(e) => { if (e.key === "Enter") handlePasswordSubmit(); }}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={handlePasswordCancel}>
+              Cancel
+            </Button>
+            <Button variant="default" onClick={handlePasswordSubmit} disabled={!lakehousePassword.trim()}>
+              Submit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
