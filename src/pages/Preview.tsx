@@ -2,9 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as models from "powerbi-models";
 import { service, factories } from "powerbi-client";
-import { Loader2, CheckCircle2, XCircle, Globe, AlertTriangle, ArrowLeft } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, Globe, AlertTriangle, ArrowLeft, Clock } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
 import AppLayout from "@/components/layout/AppLayout";
 
 import "powerbi-report-authoring";
@@ -35,11 +39,17 @@ interface ApiVisual {
 
 export default function PowerBIReport() {
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState("Initializing...");
   const [statusType, setStatusType] = useState<"loading" | "success" | "error" | "warning">("loading");
   const [source, setSource] = useState<"API" | "None">("None");
+
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [intervalMode, setIntervalMode] = useState<"preset" | "custom">("preset");
+  const [intervalMinutes, setIntervalMinutes] = useState("30");
+  const [scheduling, setScheduling] = useState(false);
 
   const isEmbedding = useRef(false);
   const executed = useRef(false);
@@ -52,6 +62,38 @@ export default function PowerBIReport() {
   const rawReportName = sessionStorage.getItem("report_name") || "sampletbl";
 
   const userToken = sessionStorage.getItem("access_token");
+
+  const LAKEHOUSE_API = "https://live-data-lakehouse-erbghyatb6f4awgf.eastus-01.azurewebsites.net/api/v1/lakehouse";
+
+  const handleScheduleRefresh = async () => {
+    const minutes = parseInt(intervalMinutes, 10);
+    if (isNaN(minutes) || minutes < 1) {
+      toast({ title: "Invalid interval", description: "Please enter a valid number of minutes (≥ 1).", variant: "destructive" });
+      return;
+    }
+
+    const workbookName = rawReportName;
+    setScheduling(true);
+    try {
+      const res = await fetch(`${LAKEHOUSE_API}/refresh/${encodeURIComponent(workbookName)}/schedule`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ interval_minutes: minutes, enable_scheduled_refresh: true }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || `HTTP ${res.status}`);
+      }
+
+      toast({ title: "Schedule set", description: `Refresh scheduled every ${minutes} minutes.` });
+      setScheduleOpen(false);
+    } catch (err: any) {
+      toast({ title: "Schedule failed", description: err.message, variant: "destructive" });
+    } finally {
+      setScheduling(false);
+    }
+  };
 
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -591,11 +633,90 @@ export default function PowerBIReport() {
           </div>
         </div>
 
+        {/* Schedule Refresh Button - shown after success */}
+        {statusType === "success" && (
+          <div className="flex justify-end">
+            <Button onClick={() => setScheduleOpen(true)} className="gap-2">
+              <Clock className="h-4 w-4" />
+              Schedule Refresh
+            </Button>
+          </div>
+        )}
+
         {/* Power BI Container */}
         <div className="relative flex-1 w-full min-h-[600px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <div ref={containerRef} className="h-full w-full" />
         </div>
       </div>
+
+      {/* Schedule Refresh Dialog */}
+      <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Schedule Refresh</DialogTitle>
+            <DialogDescription>
+              Set the refresh interval for <strong>{rawReportName}</strong>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="flex gap-2">
+              <Button
+                variant={intervalMode === "preset" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setIntervalMode("preset")}
+              >
+                Preset
+              </Button>
+              <Button
+                variant={intervalMode === "custom" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setIntervalMode("custom")}
+              >
+                Custom
+              </Button>
+            </div>
+
+            {intervalMode === "preset" ? (
+              <Select value={intervalMinutes} onValueChange={setIntervalMinutes}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select interval" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="15">Every 15 minutes</SelectItem>
+                  <SelectItem value="30">Every 30 minutes</SelectItem>
+                  <SelectItem value="60">Every 1 hour</SelectItem>
+                  <SelectItem value="120">Every 2 hours</SelectItem>
+                  <SelectItem value="360">Every 6 hours</SelectItem>
+                  <SelectItem value="720">Every 12 hours</SelectItem>
+                  <SelectItem value="1440">Every 24 hours</SelectItem>
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min={1}
+                  placeholder="Enter minutes"
+                  value={intervalMinutes}
+                  onChange={(e) => setIntervalMinutes(e.target.value)}
+                />
+                <span className="text-sm text-muted-foreground whitespace-nowrap">minutes</span>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setScheduleOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleScheduleRefresh} disabled={scheduling}>
+              {scheduling && <Loader2 className="h-4 w-4 animate-spin" />}
+              {scheduling ? "Scheduling..." : "Set Schedule"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
