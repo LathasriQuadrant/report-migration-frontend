@@ -102,7 +102,10 @@ const DestinationWorkspaceSelection = () => {
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [lakehousePassword, setLakehousePassword] = useState("");
   const [isRetryingLakehouse, setIsRetryingLakehouse] = useState(false);
-  const [pendingLakehousePayload, setPendingLakehousePayload] = useState<{ file_name: string; workspace_id: string } | null>(null);
+  const [pendingLakehousePayload, setPendingLakehousePayload] = useState<{
+    file_name: string;
+    workspace_id: string;
+  } | null>(null);
 
   const fetchWorkspaces = async (showRefreshToast = false) => {
     try {
@@ -137,18 +140,18 @@ const DestinationWorkspaceSelection = () => {
       const data = await response.json();
       // Handle both array response and object with workspaces property
       const workspacesList = Array.isArray(data) ? data : data.workspaces || data.value || [];
-       
-       console.log("Workspaces loaded:", workspacesList.length, "workspaces");
-       // Log first workspace to verify structure
-       if (workspacesList.length > 0) {
-         console.log("Sample workspace data:", {
-           name: workspacesList[0].name,
-           reportsCount: workspacesList[0].reports?.length || 0,
-           datasetsCount: workspacesList[0].datasets?.length || 0,
-         });
-       }
-       
-       setWorkspaces(workspacesList);
+
+      console.log("Workspaces loaded:", workspacesList.length, "workspaces");
+      // Log first workspace to verify structure
+      if (workspacesList.length > 0) {
+        console.log("Sample workspace data:", {
+          name: workspacesList[0].name,
+          reportsCount: workspacesList[0].reports?.length || 0,
+          datasetsCount: workspacesList[0].datasets?.length || 0,
+        });
+      }
+
+      setWorkspaces(workspacesList);
 
       if (showRefreshToast) {
         toast({ title: "Refreshed", description: "Workspaces list updated" });
@@ -197,7 +200,7 @@ const DestinationWorkspaceSelection = () => {
         console.log("Capacities raw response:", rawText);
         const data = JSON.parse(rawText);
         console.log("Capacities parsed data:", data);
-        const caps = Array.isArray(data) ? data : (data.value || data.capacities || []);
+        const caps = Array.isArray(data) ? data : data.value || data.capacities || [];
         console.log("Capacities extracted array:", caps);
         setCapacities(caps);
       } else {
@@ -326,7 +329,8 @@ const DestinationWorkspaceSelection = () => {
     }
   };
 
-  const LAKEHOUSE_URL = "https://live-data-lakehouse-erbghyatb6f4awgf.eastus-01.azurewebsites.net/api/v1/lakehouse/migrate";
+  const LAKEHOUSE_URL =
+    "https://live-data-lakehouse-erbghyatb6f4awgf.eastus-01.azurewebsites.net/api/v1/lakehouse/migrate";
   const DEPLOY_URL = "https://xmla-semanticmodel-b8gbc7b0daape3fb.eastus-01.azurewebsites.net/api/Deploy";
 
   const callLakehouseMigrate = async (fileName: string, workspaceId: string, password?: string) => {
@@ -380,6 +384,44 @@ const DestinationWorkspaceSelection = () => {
 
     setIsUploading(true);
     try {
+      // 1. Get the user's email (Fallback to dummy for testing if not set)
+      const currentUserEmail = sessionStorage.getItem("azure_user_email") || "dummy@dummy.com";
+
+      // 2. Calculate the count once, use it for both Sheets and Dashboards
+      const childCount = nodeInfo.children ? nodeInfo.children.length : 0;
+
+      // 3. Create the job in the database FIRST
+      const jobPayload = {
+        UserId: currentUserEmail,
+        ReportName: nodeInfo.name,
+        SourcePlatform: sourceNames[sourceId || ""] || "Unknown",
+        SourceReportId: String(nodeInfo.id),
+        TargetPlatform: "Power BI",
+        SheetsCount: childCount,
+        DashboardsCount: childCount,
+        WorkbooksCount: 1,
+      };
+
+      const jobRes = await fetch("https://databasemanagement-e0e0d7bqhdg3gec7.eastus-01.azurewebsites.net/jobs/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(jobPayload),
+      });
+
+      if (jobRes.ok) {
+        const newJob = await jobRes.json();
+
+        // CRUCIAL: Save the numeric Database ID (e.g., 15) for the update step
+        sessionStorage.setItem("current_migration_job_id", newJob.Id.toString());
+
+        // Immediately set it to running
+        await fetch(`https://databasemanagement-e0e0d7bqhdg3gec7.eastus-01.azurewebsites.net/jobs/${newJob.Id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ MigrationStatus: "Running" }),
+        });
+      }
+
       // Only add service principal — all other steps moved to Migration page
       await addServicePrincipalToWorkspace(selectedWorkspace.id);
 
@@ -478,12 +520,16 @@ const DestinationWorkspaceSelection = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="powerbi" size="sm" onClick={() => {
-              setIsCreateDialogOpen(true);
-              fetchCapacities();
-              setSelectedCapacityId("");
-              setNewWorkspaceName("");
-            }}>
+            <Button
+              variant="powerbi"
+              size="sm"
+              onClick={() => {
+                setIsCreateDialogOpen(true);
+                fetchCapacities();
+                setSelectedCapacityId("");
+                setNewWorkspaceName("");
+              }}
+            >
               + Create Workspace
             </Button>
 
@@ -571,7 +617,7 @@ const DestinationWorkspaceSelection = () => {
 
             {selectedWorkspace && (
               <div className="p-4 border-t border-border flex justify-end flex-shrink-0">
-                 <Button variant="powerbi" size="lg" onClick={() => setShowMigrationDialog(true)} disabled={isUploading}>
+                <Button variant="powerbi" size="lg" onClick={() => setShowMigrationDialog(true)} disabled={isUploading}>
                   {isUploading ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -674,7 +720,7 @@ const DestinationWorkspaceSelection = () => {
 
             {selectedWorkspace && (
               <div className="p-4 border-t border-border flex justify-end">
-                 <Button variant="powerbi" size="lg" onClick={() => setShowMigrationDialog(true)} disabled={isUploading}>
+                <Button variant="powerbi" size="lg" onClick={() => setShowMigrationDialog(true)} disabled={isUploading}>
                   {isUploading ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -697,18 +743,21 @@ const DestinationWorkspaceSelection = () => {
         sourceNode={nodeInfo}
         sourceName={sourceName}
         destinationWorkspace={selectedWorkspace}
-         onConfirm={handleAutoUpload}
-         isLoading={isUploading}
+        onConfirm={handleAutoUpload}
+        isLoading={isUploading}
       />
 
-      <Dialog open={isCreateDialogOpen} onOpenChange={(open) => {
-        setIsCreateDialogOpen(open);
-        if (open) {
-          fetchCapacities();
-          setSelectedCapacityId("");
-          setNewWorkspaceName("");
-        }
-      }}>
+      <Dialog
+        open={isCreateDialogOpen}
+        onOpenChange={(open) => {
+          setIsCreateDialogOpen(open);
+          if (open) {
+            fetchCapacities();
+            setSelectedCapacityId("");
+            setNewWorkspaceName("");
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create Power BI Workspace</DialogTitle>
@@ -765,12 +814,15 @@ const DestinationWorkspaceSelection = () => {
                         P4: "Premium Capacity",
                         P5: "Premium Capacity",
                       };
-                      const skuLabel = cap.sku ? (skuLabelMap[cap.sku] || cap.sku) : "";
+                      const skuLabel = cap.sku ? skuLabelMap[cap.sku] || cap.sku : "";
 
                       return (
                         <SelectItem key={cap.id} value={cap.id} disabled={isDisabled}>
                           <div className="flex flex-col">
-                            <span>{cap.displayName}{skuLabel ? ` (${skuLabel})` : ""}</span>
+                            <span>
+                              {cap.displayName}
+                              {skuLabel ? ` (${skuLabel})` : ""}
+                            </span>
                             {isDisabled && (
                               <span className="text-xs text-muted-foreground">
                                 {!isActive ? "Inactive" : "No access"}
@@ -800,8 +852,6 @@ const DestinationWorkspaceSelection = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Password dialog removed — handled on Migration page now */}
     </AppLayout>
   );
 };
