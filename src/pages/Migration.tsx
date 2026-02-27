@@ -167,22 +167,49 @@ export default function Migration() {
       try {
         const fileName = `${reportName}.twbx`;
 
-        // 3a) Lakehouse migrate
+        // 3a) Lakehouse migrate (2 automatic attempts, then password prompt)
         const lakehouseBody: Record<string, string> = { file_name: fileName, workspace_id: workspaceId };
-        let lakehouseRes = await fetch(LAKEHOUSE_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", accept: "application/json" },
-          body: JSON.stringify(lakehouseBody),
-        });
-        let lakehouseData = await lakehouseRes.json();
 
-        // Check if password is required
-        if (
-          !lakehouseRes.ok &&
-          (lakehouseData.detail?.toLowerCase().includes("password") ||
-            lakehouseData.message?.toLowerCase().includes("password"))
-        ) {
-          log("Lakehouse requires password, prompting user…");
+        const postLakehouse = async (payload: Record<string, string>) => {
+          const res = await fetch(LAKEHOUSE_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", accept: "application/json" },
+            body: JSON.stringify(payload),
+          });
+
+          let data: any = {};
+          try {
+            data = await res.json();
+          } catch {
+            data = {};
+          }
+
+          return { res, data };
+        };
+
+        const getLakehouseError = (data: any, status: number) =>
+          data?.detail || data?.message || `Lakehouse migration failed (${status})`;
+
+        let lakehouseRes: Response | null = null;
+        let lakehouseData: any = {};
+        let isLakehouseSuccess = false;
+
+        for (let attempt = 1; attempt <= 2; attempt += 1) {
+          updateStep(2, "running", `Migrating to Lakehouse… (attempt ${attempt}/2)`);
+          const { res, data } = await postLakehouse(lakehouseBody);
+          lakehouseRes = res;
+          lakehouseData = data;
+
+          if (res.ok && data?.status === "success") {
+            isLakehouseSuccess = true;
+            break;
+          }
+
+          log(`Lakehouse attempt ${attempt} failed: ${getLakehouseError(data, res.status)}`);
+        }
+
+        if (!isLakehouseSuccess) {
+          log("Lakehouse failed twice, prompting for password…");
           updateStep(2, "running", "Password required – waiting for input…");
 
           const password = await promptForPassword();
@@ -190,19 +217,15 @@ export default function Migration() {
             throw new Error("Password entry cancelled by user");
           }
 
-          // Retry with password
-          updateStep(2, "running", "Retrying Lakehouse migration…");
-          lakehouseBody.password = password;
-          lakehouseRes = await fetch(LAKEHOUSE_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", accept: "application/json" },
-            body: JSON.stringify(lakehouseBody),
-          });
-          lakehouseData = await lakehouseRes.json();
+          updateStep(2, "running", "Retrying Lakehouse migration with password…");
+          const { res, data } = await postLakehouse({ ...lakehouseBody, password });
+          lakehouseRes = res;
+          lakehouseData = data;
+          isLakehouseSuccess = res.ok && data?.status === "success";
         }
 
-        if (!lakehouseRes.ok || lakehouseData.status !== "success") {
-          throw new Error(lakehouseData.detail || lakehouseData.message || "Lakehouse migration failed");
+        if (!isLakehouseSuccess || !lakehouseRes) {
+          throw new Error(getLakehouseError(lakehouseData, lakehouseRes?.status ?? 500));
         }
 
         console.log("Lakehouse migration successful:", lakehouseData);
