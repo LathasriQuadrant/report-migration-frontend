@@ -658,7 +658,6 @@ const Explorer = () => {
     }
     const BASE = "https://tableau-backend-app-hrdxfhfpghf3f0bg.eastus-01.azurewebsites.net/tableau";
 
-    // Only download workbook — parse/upload/extract moved to Migration page
     const dlRes = await fetch(`${BASE}/download_workbook`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -666,7 +665,16 @@ const Explorer = () => {
     });
     if (!dlRes.ok) throw new Error("Failed to download workbook");
     const dlData = await dlRes.json();
-    console.log("Workbook downloaded:", dlData);
+    const blobPath = dlData.blob_path || dlData.file_name || `${workbookName}.twbx`;
+
+    const filename = workbookName.replace(/\.twbx$/i, "");
+    const parseRes = await fetch(`https://tomgenerator-b0e2byeyhmc5caht.eastus-01.azurewebsites.net/parse/${encodeURIComponent(filename)}`, {
+      method: "POST",
+      headers: { accept: "application/json" },
+    });
+    if (!parseRes.ok) throw new Error("Failed to parse workbook");
+    const parseData = await parseRes.json();
+    sessionStorage.setItem("parsed_workbook_data", JSON.stringify(parseData));
     return true;
   };
 
