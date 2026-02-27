@@ -550,12 +550,7 @@ import { buildTableauTree } from "@/data/tableauTreeMapper";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 
-// ReportFlow brand colors
-const PRIMARY = "#2563EB"; // ReportFlow blue
-const PRIMARY_LIGHT = "#9CD5FF"; // soft blue tint for backgrounds
-const SECONDARY = "#9CD5FF"; // light yellow — hover background
-const SECONDARY_BORDER = "#9CD5FF"; // yellow border accent on hover
-const SECONDARY_TEXT = "#92400E"; // amber-brown for text on yellow
+// No hardcoded colors — using design system tokens via Tailwind classes
 
 const ITEMS_PER_PAGE = 8;
 
@@ -746,59 +741,36 @@ const Explorer = () => {
   // ── Sub-components ────────────────────────────────────────────────────
   const PaginationBar = () => (
     <div className="flex items-center gap-1">
-      {/* Prev */}
       <button
         onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
         disabled={safePage === 1}
-        className="h-8 w-8 flex items-center justify-center rounded-lg border border-transparent text-muted-foreground hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+        className="h-8 w-8 flex items-center justify-center rounded-lg border border-transparent text-muted-foreground hover:border-accent hover:bg-accent hover:text-accent-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all"
       >
         <ChevronLeft className="w-4 h-4" />
       </button>
 
-      {/* Page numbers */}
       {getPageNumbers().map((page, i) =>
         page === "..." ? (
-          <span
-            key={`ellipsis-${i}`}
-            className="h-8 w-8 flex items-center justify-center text-xs text-muted-foreground"
-          >
-            …
-          </span>
+          <span key={`ellipsis-${i}`} className="h-8 w-8 flex items-center justify-center text-xs text-muted-foreground">…</span>
         ) : (
           <button
             key={`page-${page}`}
             onClick={() => setCurrentPage(page as number)}
-            className="h-8 min-w-[32px] px-2 flex items-center justify-center rounded-lg text-xs font-semibold border transition-all"
-            style={
+            className={`h-8 min-w-[32px] px-2 flex items-center justify-center rounded-lg text-xs font-semibold border transition-all ${
               safePage === page
-                ? { backgroundColor: PRIMARY, color: "#fff", borderColor: PRIMARY, boxShadow: `0 2px 8px ${PRIMARY}35` }
-                : { backgroundColor: "transparent", color: "#6B7280", borderColor: "#E5E7EB" }
-            }
-            onMouseEnter={(e) => {
-              if (safePage !== page) {
-                (e.currentTarget as HTMLElement).style.backgroundColor = SECONDARY;
-                (e.currentTarget as HTMLElement).style.borderColor = SECONDARY_BORDER;
-                (e.currentTarget as HTMLElement).style.color = SECONDARY_TEXT;
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (safePage !== page) {
-                (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
-                (e.currentTarget as HTMLElement).style.borderColor = "#E5E7EB";
-                (e.currentTarget as HTMLElement).style.color = "#6B7280";
-              }
-            }}
+                ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                : "bg-transparent text-muted-foreground border-border hover:bg-accent hover:border-accent hover:text-accent-foreground"
+            }`}
           >
             {page}
           </button>
         ),
       )}
 
-      {/* Next */}
       <button
         onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
         disabled={safePage === totalPages}
-        className="h-8 w-8 flex items-center justify-center rounded-lg border border-transparent text-muted-foreground hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+        className="h-8 w-8 flex items-center justify-center rounded-lg border border-transparent text-muted-foreground hover:border-accent hover:bg-accent hover:text-accent-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all"
       >
         <ChevronRight className="w-4 h-4" />
       </button>
@@ -810,69 +782,56 @@ const Explorer = () => {
   );
 
   // ── Migrate button shared style ───────────────────────────────────────
-  const migrateStyle = (enabled: boolean) => ({
-    backgroundColor: enabled ? PRIMARY : "#D1D5DB",
-    color: "#fff",
-    boxShadow: enabled ? `0 4px 12px ${PRIMARY}40` : "none",
-  });
+  // Migrate button uses Tailwind classes now — no inline styles needed
 
   // ═══════════════════════════════════════════════════════════════════════
   return (
     <AppLayout>
-      {/* ── Page background: clean off-white with very subtle blue tint ── */}
-      <div className="min-h-full" style={{ backgroundColor: "#F1F5FB" }}>
+      <div className="min-h-full bg-background">
         <div className="max-w-7xl mx-auto h-full flex flex-col gap-3 p-4">
-          {/* ── Top bar: back · breadcrumb | search | toggle · refresh ── */}
+          {/* ── Top bar ── */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            {/* Back + breadcrumb */}
             <div className="flex items-center gap-2 flex-shrink-0">
               <button
                 onClick={() => navigate("/")}
-                className="h-9 w-9 flex items-center justify-center rounded-xl bg-white border border-gray-200 text-gray-500 hover:text-blue-700 hover:border-blue-300 hover:bg-blue-50 shadow-sm transition-all"
+                className="h-9 w-9 flex items-center justify-center rounded-xl bg-card border border-border text-muted-foreground hover:text-primary hover:border-primary/30 hover:bg-accent shadow-sm transition-all"
               >
                 <ArrowLeft className="w-4 h-4" />
               </button>
               <div className="flex items-center gap-1.5 text-sm">
-                <button
-                  onClick={() => navigate("/")}
-                  className="text-muted-foreground hover:text-foreground transition-colors"
-                >
+                <button onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground transition-colors">
                   Dashboard
                 </button>
                 <ChevronRight className="w-3 h-3 text-muted-foreground" />
-                <span className="font-semibold" style={{ color: PRIMARY }}>
-                  {sourceName} Explorer
-                </span>
+                <span className="font-semibold text-primary">{sourceName} Explorer</span>
               </div>
             </div>
 
-            {/* Search — fills middle */}
             <div className="relative flex-1 mx-2">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
               <Input
-                placeholder={
-                  viewMode === "grid" ? "Search workbooks or projects..." : "Search reports, dashboards, workbooks..."
-                }
+                placeholder={viewMode === "grid" ? "Search workbooks or projects..." : "Search reports, dashboards, workbooks..."}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-9 text-sm bg-white border-gray-200 shadow-sm focus-visible:ring-blue-400"
+                className="pl-9 h-9 text-sm bg-card border-border shadow-sm focus-visible:ring-ring"
               />
             </div>
 
-            {/* View toggle + Refresh */}
             <div className="flex items-center gap-2 flex-shrink-0">
-              <div className="flex items-center bg-white border border-gray-200 rounded-xl p-0.5 gap-0.5 shadow-sm">
+              <div className="flex items-center bg-card border border-border rounded-xl p-0.5 gap-0.5 shadow-sm">
                 <button
                   onClick={() => setViewMode("grid")}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-                  style={viewMode === "grid" ? { backgroundColor: PRIMARY, color: "#fff" } : { color: "#6B7280" }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    viewMode === "grid" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                  }`}
                 >
                   <LayoutGrid className="w-3.5 h-3.5" /> Grid
                 </button>
                 <button
                   onClick={() => setViewMode("tree")}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-                  style={viewMode === "tree" ? { backgroundColor: PRIMARY, color: "#fff" } : { color: "#6B7280" }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    viewMode === "tree" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                  }`}
                 >
                   <List className="w-3.5 h-3.5" /> Tree
                 </button>
@@ -881,7 +840,7 @@ const Explorer = () => {
               <button
                 onClick={handleRefresh}
                 disabled={isRefreshing}
-                className="h-9 px-3 flex items-center gap-1.5 rounded-xl bg-white border border-gray-200 text-xs font-medium text-gray-600 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 disabled:opacity-40 shadow-sm transition-all"
+                className="h-9 px-3 flex items-center gap-1.5 rounded-xl bg-card border border-border text-xs font-medium text-muted-foreground hover:bg-accent hover:border-primary/30 hover:text-primary disabled:opacity-40 shadow-sm transition-all"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
                 Refresh
@@ -891,91 +850,59 @@ const Explorer = () => {
 
           {/* ════════════════ GRID VIEW ════════════════ */}
           {viewMode === "grid" && (
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
-              {/* Workbook grid */}
+            <div className="bg-card rounded-2xl border border-border shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
               <div className="p-4 flex-1 overflow-y-auto">
                 {filteredWorkbooks.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-48 gap-3 text-muted-foreground">
-                    <div
-                      className="w-14 h-14 rounded-2xl flex items-center justify-center"
-                      style={{ backgroundColor: PRIMARY_LIGHT }}
-                    >
-                      <BookOpen className="w-7 h-7" style={{ color: PRIMARY }} />
+                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-accent">
+                      <BookOpen className="w-7 h-7 text-primary" />
                     </div>
                     <div className="text-center">
-                      <p className="text-sm font-medium text-gray-700">No workbooks found</p>
-                      {searchQuery && <p className="text-xs text-gray-400 mt-0.5">Try a different search term</p>}
+                      <p className="text-sm font-medium text-foreground">No workbooks found</p>
+                      {searchQuery && <p className="text-xs text-muted-foreground mt-0.5">Try a different search term</p>}
                     </div>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                     {paginatedWorkbooks.map((wb) => {
                       const isSelected = selectedWorkbook?.id === wb.id;
-                      const isHovered = hoveredId === wb.id;
-
                       return (
                         <button
                           key={wb.id}
                           onClick={() => setSelectedWorkbook(isSelected ? null : wb)}
-                          onMouseEnter={() => setHoveredId(wb.id)}
-                          onMouseLeave={() => setHoveredId(null)}
-                          className="relative flex flex-col text-left rounded-xl border transition-all duration-200 overflow-hidden"
-                          style={{
-                            backgroundColor: isSelected ? PRIMARY_LIGHT : isHovered ? SECONDARY : "#F9FAFB",
-                            borderColor: isSelected ? PRIMARY : isHovered ? SECONDARY_BORDER : "#E5E7EB",
-                            boxShadow: isSelected
-                              ? `0 0 0 2px ${PRIMARY}, 0 4px 14px ${PRIMARY}20`
-                              : isHovered
-                                ? `0 4px 12px rgba(0,0,0,0.08)`
-                                : "0 1px 3px rgba(0,0,0,0.04)",
-                            transform: isHovered && !isSelected ? "translateY(-2px)" : "none",
-                          }}
+                          className={`relative flex flex-col text-left rounded-xl border transition-all duration-200 overflow-hidden group ${
+                            isSelected
+                              ? "bg-accent border-primary ring-2 ring-primary shadow-md"
+                              : "bg-muted/30 border-border hover:bg-accent hover:border-accent-foreground/20 hover:shadow-md hover:-translate-y-0.5"
+                          }`}
                         >
-                          {/* Top accent line */}
-                          <div
-                            className="h-0.5 w-full flex-shrink-0 transition-all duration-200"
-                            style={{
-                              backgroundColor: isSelected ? PRIMARY : isHovered ? SECONDARY_BORDER : "transparent",
-                            }}
-                          />
+                          <div className={`h-0.5 w-full flex-shrink-0 transition-all duration-200 ${
+                            isSelected ? "bg-primary" : "bg-transparent group-hover:bg-accent-foreground/30"
+                          }`} />
 
                           <div className="px-3.5 pt-3 pb-3.5 flex flex-col gap-2.5 flex-1">
-                            {/* Icon row */}
                             <div className="flex items-start justify-between">
-                              <div
-                                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-all duration-200"
-                                style={{
-                                  backgroundColor: isSelected ? `${PRIMARY}18` : isHovered ? "#FEF9C3" : "#F3F4F6",
-                                  color: isSelected ? PRIMARY : isHovered ? "#A16207" : "#9CA3AF",
-                                }}
-                              >
+                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-all duration-200 ${
+                                isSelected ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground group-hover:bg-accent group-hover:text-accent-foreground"
+                              }`}>
                                 <BookOpen className="w-4 h-4" />
                               </div>
-                              {isSelected && (
-                                <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: PRIMARY }} />
-                              )}
+                              {isSelected && <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5 text-primary" />}
                             </div>
 
-                            {/* Workbook name */}
-                            <p
-                              className="font-semibold text-sm leading-snug line-clamp-2 transition-colors duration-200"
-                              style={{
-                                color: isSelected ? PRIMARY : isHovered ? SECONDARY_TEXT : "#111827",
-                              }}
-                            >
+                            <p className={`font-semibold text-sm leading-snug line-clamp-2 transition-colors duration-200 ${
+                              isSelected ? "text-primary" : "text-foreground"
+                            }`}>
                               {wb.name}
                             </p>
 
-                            {/* Project name */}
                             <div className="flex items-center gap-1.5 mt-auto">
-                              <FolderOpen
-                                className="w-3 h-3 flex-shrink-0 transition-colors duration-200"
-                                style={{ color: isSelected ? PRIMARY : isHovered ? "#D97706" : "#D1D5DB" }}
-                              />
-                              <span
-                                className="text-xs truncate transition-colors duration-200"
-                                style={{ color: isSelected ? `${PRIMARY}CC` : isHovered ? "#92400E" : "#9CA3AF" }}
-                              >
+                              <FolderOpen className={`w-3 h-3 flex-shrink-0 transition-colors duration-200 ${
+                                isSelected ? "text-primary" : "text-muted-foreground/50"
+                              }`} />
+                              <span className={`text-xs truncate transition-colors duration-200 ${
+                                isSelected ? "text-primary/80" : "text-muted-foreground"
+                              }`}>
                                 {wb.projectName || "—"}
                               </span>
                             </div>
@@ -987,26 +914,19 @@ const Explorer = () => {
                 )}
               </div>
 
-              {/* Footer: pagination · migrate */}
-              <div className="px-4 py-3 border-t border-gray-100 bg-gray-50/60 flex items-center justify-between flex-shrink-0 gap-4">
+              <div className="px-4 py-3 border-t border-border bg-muted/30 flex items-center justify-between flex-shrink-0 gap-4">
                 <PaginationBar />
-
                 <button
                   onClick={handleMigrateWorkbook}
                   disabled={!selectedWorkbook || isMigrating}
-                  className="h-9 px-4 flex items-center gap-1.5 rounded-xl text-xs font-semibold text-white disabled:cursor-not-allowed transition-all flex-shrink-0"
-                  style={migrateStyle(!!selectedWorkbook && !isMigrating)}
+                  className={`h-9 px-4 flex items-center gap-1.5 rounded-xl text-xs font-semibold text-primary-foreground disabled:cursor-not-allowed transition-all flex-shrink-0 ${
+                    selectedWorkbook && !isMigrating ? "bg-primary shadow-md" : "bg-muted-foreground/30"
+                  }`}
                 >
                   {isMigrating ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      Preparing...
-                    </>
+                    <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Preparing...</>
                   ) : (
-                    <>
-                      <Zap className="w-3.5 h-3.5" />
-                      Migrate to Power BI
-                    </>
+                    <><Zap className="w-3.5 h-3.5" /> Migrate to Power BI</>
                   )}
                 </button>
               </div>
@@ -1015,14 +935,11 @@ const Explorer = () => {
 
           {/* ════════════════ TREE VIEW ════════════════ */}
           {viewMode === "tree" && (
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
+            <div className="bg-card rounded-2xl border border-border shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
               {selectedNode && (
-                <div className="px-4 py-2 border-b border-gray-100 flex items-center gap-1.5 flex-shrink-0">
+                <div className="px-4 py-2 border-b border-border flex items-center gap-1.5 flex-shrink-0">
                   <span className="text-xs text-muted-foreground">Selected:</span>
-                  <span
-                    className="flex items-center gap-1 text-xs font-medium rounded-full px-2.5 py-0.5 border"
-                    style={{ color: PRIMARY, borderColor: `${PRIMARY}30`, backgroundColor: PRIMARY_LIGHT }}
-                  >
+                  <span className="flex items-center gap-1 text-xs font-medium rounded-full px-2.5 py-0.5 border text-primary border-primary/20 bg-accent">
                     <Zap className="w-3 h-3" />
                     {selectedNode.name}
                   </span>
@@ -1033,26 +950,21 @@ const Explorer = () => {
                 <TreeView nodes={treeData} selectedId={selectedNode?.id || null} onSelect={setSelectedNode} />
               </div>
 
-              <div className="px-4 py-3 border-t border-gray-100 bg-gray-50/60 flex items-center justify-between flex-shrink-0">
+              <div className="px-4 py-3 border-t border-border bg-muted/30 flex items-center justify-between flex-shrink-0">
                 <span className="text-xs text-muted-foreground">
                   {selectedNode ? `"${selectedNode.name}" ready to migrate` : "Select a node from the tree"}
                 </span>
                 <button
                   onClick={handleMigrateNode}
                   disabled={!selectedNode || isMigrating}
-                  className="h-9 px-4 flex items-center gap-1.5 rounded-xl text-xs font-semibold text-white disabled:cursor-not-allowed transition-all"
-                  style={migrateStyle(!!selectedNode && !isMigrating)}
+                  className={`h-9 px-4 flex items-center gap-1.5 rounded-xl text-xs font-semibold text-primary-foreground disabled:cursor-not-allowed transition-all ${
+                    selectedNode && !isMigrating ? "bg-primary shadow-md" : "bg-muted-foreground/30"
+                  }`}
                 >
                   {isMigrating ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      Preparing...
-                    </>
+                    <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Preparing...</>
                   ) : (
-                    <>
-                      <Zap className="w-3.5 h-3.5" />
-                      Migrate to Power BI
-                    </>
+                    <><Zap className="w-3.5 h-3.5" /> Migrate to Power BI</>
                   )}
                 </button>
               </div>
