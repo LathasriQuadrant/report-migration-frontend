@@ -105,6 +105,9 @@ export default function PowerBIReport() {
     executed.current = true;
     console.group("🚀 Creating Visuals from API");
 
+    // 1. Grab the Job ID we saved on the previous screen
+    const currentJobId = sessionStorage.getItem("current_migration_job_id");
+
     try {
       setStatus("Fetching visual configuration...");
 
@@ -135,6 +138,27 @@ export default function PowerBIReport() {
       if (visualsToCreate.length === 0) {
         setStatus("No visuals to create (Check API logs)");
         setStatusType("warning");
+
+        // ❌ DB UPDATE: Mark as failed because no visuals were found
+        if (currentJobId) {
+          try {
+            await fetch(
+              `https://databasemanagement-e0e0d7bqhdg3gec7.eastus-01.azurewebsites.net/jobs/${currentJobId}`,
+              {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  MigrationStatus: "Failed",
+                  ErrorMessage: "No visuals to create (Check API logs)",
+                  CompletedAt: new Date().toISOString(),
+                }),
+              },
+            );
+          } catch (e) {
+            console.error("Failed to update job status", e);
+          }
+        }
+
         console.groupEnd();
         return;
       }
@@ -147,7 +171,7 @@ export default function PowerBIReport() {
       }
       await sleep(1000);
 
-      // 1. Build lookup map
+      // Build lookup map
       const visualMap = new Map<string, ApiVisual>();
       visualsToCreate.forEach((v) => visualMap.set(v.title, v));
 
@@ -323,10 +347,43 @@ export default function PowerBIReport() {
       await report.save();
       setStatus("Dashboards and Visuals generated successfully!");
       setStatusType("success");
+
+      // ✅ DB UPDATE SUCCESS: Update the database to Completed
+      if (currentJobId) {
+        try {
+          await fetch(`https://databasemanagement-e0e0d7bqhdg3gec7.eastus-01.azurewebsites.net/jobs/${currentJobId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              MigrationStatus: "Completed",
+              CompletedAt: new Date().toISOString(), // Gives us the end time for duration math
+            }),
+          });
+        } catch (e) {
+          console.error("Failed to update job status to Completed", e);
+        }
+      }
     } catch (err: any) {
       console.error("❌ Critical Error:", err);
       setStatus("Error: " + err.message);
       setStatusType("error");
+
+      // ❌ DB UPDATE FAILED: Update the database to Failed
+      if (currentJobId) {
+        try {
+          await fetch(`https://databasemanagement-e0e0d7bqhdg3gec7.eastus-01.azurewebsites.net/jobs/${currentJobId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              MigrationStatus: "Failed",
+              ErrorMessage: err.message || "Unknown error occurred during visual generation",
+              CompletedAt: new Date().toISOString(),
+            }),
+          });
+        } catch (e) {
+          console.error("Failed to update job status to Failed", e);
+        }
+      }
     } finally {
       console.groupEnd();
     }
@@ -348,11 +405,6 @@ export default function PowerBIReport() {
       console.log("rawReportName:", rawReportName);
       console.groupEnd();
 
-      // if (!workspaceId || !reportId) {
-      //   setStatus("Missing Session Data");
-      //   setStatusType("error");
-      //   return;
-      // }
       if (!workspaceId || !reportId || !userToken) {
         setStatus("Missing Session Data or Auth Token");
         setStatusType("error");
@@ -360,69 +412,8 @@ export default function PowerBIReport() {
       }
 
       try {
-        // /* ---- DEBUG: Embed token request ---- */
-        // console.group("🔑 DEBUG: Embed Token Request");
-        // // const tokenPayload = { workspaceId, reportId, datasetId };
-
-        // const tokenPayload = { workspaceId, reportId, datasetId, userToken };
-        // console.log("Request payload:", JSON.stringify(tokenPayload, null, 2));
-
-        // const res = await fetch("https://visuals-json-gdfth9dsbmhrgcb0.eastus-01.azurewebsites.net/embed-token", {
-        //   method: "POST",
-        //   headers: { "Content-Type": "application/json" },
-        //   body: JSON.stringify(tokenPayload),
-        // });
-
-        // console.log("HTTP Status:", res.status, res.statusText);
-        // console.log("Response Headers:");
-        // res.headers.forEach((value, key) => {
-        //   console.log(`  ${key}: ${value}`);
-        //   if (
-        //     key.toLowerCase().includes("request") ||
-        //     key.toLowerCase().includes("activity") ||
-        //     key.toLowerCase().includes("cluster")
-        //   ) {
-        //     console.log(`  ⭐ ${key}: ${value}`);
-        //   }
-        // });
-
-        // const tokenData = await res.json();
-        // const { embedToken, embedUrl } = tokenData;
-
-        // console.log("embedUrl:", embedUrl);
-        // console.log("embedToken (first 50 chars):", embedToken ? embedToken.substring(0, 50) + "..." : "MISSING!");
-        // console.log("embedToken type:", typeof embedToken);
-        // console.log("embedToken length:", embedToken ? embedToken.length : 0);
-        // console.log("Full token response keys:", Object.keys(tokenData));
-        // if (tokenData.modelId) console.log("modelId from token response:", tokenData.modelId);
-        // if (tokenData.datasetId) console.log("datasetId from token response:", tokenData.datasetId);
-        // console.groupEnd();
-
-        // if (!embedToken) {
-        //   console.error("❌ CRITICAL: embedToken is missing or empty!");
-        //   setStatus("Embed token missing from response");
-        //   setStatusType("error");
-        //   return;
-        // }
-
         if (containerRef.current) {
           pbiService.reset(containerRef.current);
-
-          // const embedConfig = {
-          //   type: "report",
-          //   id: reportId,
-          //   embedUrl,
-          //   accessToken: embedToken,
-          //   tokenType: models.TokenType.Embed,
-          //   permissions: models.Permissions.All,
-          //   viewMode: models.ViewMode.Edit,
-          //   settings: {
-          //     panes: {
-          //       fields: { visible: true, expanded: true },
-          //       visualizations: { visible: true },
-          //     },
-          //   },
-          // };
 
           // 🚀 We build the URL manually now
           const builtEmbedUrl = `https://app.powerbi.com/reportEmbed?reportId=${reportId}&groupId=${workspaceId}`;
@@ -444,7 +435,7 @@ export default function PowerBIReport() {
           };
 
           console.group("📋 DEBUG: Embed Configuration");
-          console.log("tokenType:", models.TokenType.Embed, "(models.TokenType.Embed)");
+          console.log("tokenType:", models.TokenType.Aad, "(models.TokenType.Aad)");
           console.log("permissions:", models.Permissions.All, "(models.Permissions.All)");
           console.log("viewMode:", models.ViewMode.Edit, "(models.ViewMode.Edit)");
           console.log("report id:", reportId);
@@ -560,7 +551,7 @@ export default function PowerBIReport() {
       }
     }
     init();
-  }, []);
+  }, [workspaceId, reportId, datasetId, metadataBlobUrl, rawReportName, userToken]);
 
   return (
     <AppLayout>
