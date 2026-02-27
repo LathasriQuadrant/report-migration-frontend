@@ -380,79 +380,21 @@ const DestinationWorkspaceSelection = () => {
 
     setIsUploading(true);
     try {
-      // Add service principal to the selected workspace
+      // Only add service principal — all other steps moved to Migration page
       await addServicePrincipalToWorkspace(selectedWorkspace.id);
 
-      // Get blob folder URL from extraction step (stored in sessionStorage)
-      const blobFolderUrl = sessionStorage.getItem("extraction_output_folder") || "";
-      const extractionFiles = sessionStorage.getItem("extraction_output_files") || "[]";
-
-      console.log("Blob folder URL:", blobFolderUrl);
-      console.log("Extraction files:", extractionFiles);
-
-      const response = await fetch("https://report-uploader-awa8avchh6gqa3ad.eastus-01.azurewebsites.net/upload-report", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          accept: "application/json",
-        },
-        body: JSON.stringify({
-          workspace_id: selectedWorkspace.id,
-          report_name: nodeInfo.name,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.detail || result.message || "Failed to upload template");
-      }
-
-      console.log("Auto-upload successful:", result);
-
-      // Store full response and key fields in sessionStorage
-      sessionStorage.setItem("upload_response", JSON.stringify(result));
-      sessionStorage.setItem("upload_message", result.message || "");
-      sessionStorage.setItem("upload_workspace_id", result.workspace_id || selectedWorkspace.id);
-      sessionStorage.setItem("upload_report_name", result.report_name || nodeInfo.name);
-      sessionStorage.setItem("upload_report_id", result.report_id || "");
-      sessionStorage.setItem("upload_dataset_id", result.dataset_id || "");
-      console.log("Stored upload response keys:", {
-        message: result.message,
-        workspace_id: result.workspace_id,
-        report_name: result.report_name,
-        report_id: result.report_id,
-        dataset_id: result.dataset_id,
-      });
-      // Keep legacy keys for backward compatibility
-      sessionStorage.setItem("report_name", result.report_name || nodeInfo.name);
-      sessionStorage.setItem("report_id", result.report_id || "");
-      sessionStorage.setItem("workspace_id", result.workspace_id || selectedWorkspace.id);
+      // Store workspace info in sessionStorage for Migration page
+      sessionStorage.setItem("workspace_id", selectedWorkspace.id);
       sessionStorage.setItem("workspace_name", selectedWorkspace.name);
 
-      // ---- Lakehouse Migrate ----
-      const fileName = `${nodeInfo.name}.twbx`;
-      try {
-        const lakehouseResult = await callLakehouseMigrate(fileName, selectedWorkspace.id);
-        console.log("Lakehouse migration successful:", lakehouseResult);
-        sessionStorage.setItem("lakehouse_response", JSON.stringify(lakehouseResult));
+      toast({
+        title: "Workspace Ready",
+        description: `Service principal added to "${selectedWorkspace.name}"`,
+      });
 
-        // Deploy semantic model
-        await callDeploy(lakehouseResult, selectedWorkspace.name);
-
-        toast({
-          title: "Success",
-          description: `Migration completed for "${selectedWorkspace.name}"`,
-        });
-
-        navigate(`/migrate/${nodeInfo.id}`, {
-          state: { node: nodeInfo, source: sourceId, workspace: selectedWorkspace, blobFolderUrl },
-        });
-      } catch (lakehouseErr) {
-        console.warn("Lakehouse migrate failed without password, prompting user:", lakehouseErr);
-        setPendingLakehousePayload({ file_name: fileName, workspace_id: selectedWorkspace.id });
-        setShowPasswordDialog(true);
-      }
+      navigate(`/migrate/${nodeInfo.id}`, {
+        state: { node: nodeInfo, source: sourceId, workspace: selectedWorkspace },
+      });
     } catch (err) {
       console.error("Migration error:", err);
       toast({
@@ -465,46 +407,7 @@ const DestinationWorkspaceSelection = () => {
     }
   };
 
-  const handlePasswordRetry = async () => {
-    if (!pendingLakehousePayload || !lakehousePassword.trim()) return;
-
-    setIsRetryingLakehouse(true);
-    try {
-      const lakehouseResult = await callLakehouseMigrate(
-        pendingLakehousePayload.file_name,
-        pendingLakehousePayload.workspace_id,
-        lakehousePassword.trim(),
-      );
-      console.log("Lakehouse migration with password successful:", lakehouseResult);
-      sessionStorage.setItem("lakehouse_response", JSON.stringify(lakehouseResult));
-
-      // Deploy semantic model
-      await callDeploy(lakehouseResult, selectedWorkspace!.name);
-
-      setShowPasswordDialog(false);
-      setLakehousePassword("");
-      setPendingLakehousePayload(null);
-
-      toast({
-        title: "Success",
-        description: "Lakehouse migration completed successfully",
-      });
-
-      const blobFolderUrl = sessionStorage.getItem("extraction_output_folder") || "";
-      navigate(`/migrate/${nodeInfo!.id}`, {
-        state: { node: nodeInfo, source: sourceId, workspace: selectedWorkspace, blobFolderUrl },
-      });
-    } catch (err) {
-      console.error("Lakehouse retry failed:", err);
-      toast({
-        title: "Lakehouse Migration Failed",
-        description: err instanceof Error ? err.message : "Please check the password and try again",
-        variant: "destructive",
-      });
-    } finally {
-      setIsRetryingLakehouse(false);
-    }
-  };
+  // Password retry removed — handled on Migration page now
 
   const handleStartMigration = () => {
     if (selectedWorkspace && nodeInfo) {
@@ -876,33 +779,7 @@ const DestinationWorkspaceSelection = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Lakehouse Password Dialog */}
-      <Dialog open={showPasswordDialog} onOpenChange={(open) => { if (!open) { setShowPasswordDialog(false); setLakehousePassword(""); } }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Password Required</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            The data source requires authentication. Please enter the password to continue the migration.
-          </p>
-          <Input
-            type="password"
-            placeholder="Enter password"
-            value={lakehousePassword}
-            onChange={(e) => setLakehousePassword(e.target.value)}
-            autoFocus
-            onKeyDown={(e) => { if (e.key === "Enter") handlePasswordRetry(); }}
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowPasswordDialog(false); setLakehousePassword(""); }}>
-              Cancel
-            </Button>
-            <Button variant="powerbi" onClick={handlePasswordRetry} disabled={isRetryingLakehouse || !lakehousePassword.trim()}>
-              {isRetryingLakehouse ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Retrying...</> : "Submit"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Password dialog removed — handled on Migration page now */}
     </AppLayout>
   );
 };
