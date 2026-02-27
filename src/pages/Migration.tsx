@@ -169,7 +169,7 @@ export default function Migration() {
 
         // 3a) Lakehouse migrate with retry logic
         const lakehouseBody: Record<string, string> = { file_name: fileName, workspace_id: workspaceId };
-        const MAX_RETRIES = 3;
+        const MAX_RETRIES = 2;
         let lakehouseData: any = null;
         let lakehouseSuccess = false;
 
@@ -201,6 +201,12 @@ export default function Migration() {
             lakehouseData = {};
           }
 
+          // Success check
+          if (lakehouseRes.ok && lakehouseData.status === "success") {
+            lakehouseSuccess = true;
+            break;
+          }
+
           // Check if password is required
           const isPasswordError =
             !lakehouseRes.ok &&
@@ -219,22 +225,22 @@ export default function Migration() {
             // Retry with password
             updateStep(2, "running", "Retrying Lakehouse migration with password…");
             lakehouseBody.password = password;
-            lakehouseRes = await fetch(LAKEHOUSE_URL, {
+            const retryRes = await fetch(LAKEHOUSE_URL, {
               method: "POST",
               headers: { "Content-Type": "application/json", accept: "application/json" },
               body: JSON.stringify(lakehouseBody),
             });
             try {
-              lakehouseData = await lakehouseRes.json();
+              lakehouseData = await retryRes.json();
             } catch {
               lakehouseData = {};
             }
-          }
 
-          // Success check
-          if (lakehouseRes.ok && lakehouseData.status === "success") {
-            lakehouseSuccess = true;
-            break;
+            if (retryRes.ok && lakehouseData.status === "success") {
+              lakehouseSuccess = true;
+              break;
+            }
+            throw new Error(lakehouseData.detail || lakehouseData.message || "Lakehouse migration failed with password");
           }
 
           // Non-password error – retry with backoff
