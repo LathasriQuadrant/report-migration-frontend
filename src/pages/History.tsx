@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Search, Filter, ExternalLink, ChevronRight, Loader2 } from "lucide-react";
+import { ArrowLeft, Search, Filter, ChevronRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import AppLayout from "@/components/layout/AppLayout";
@@ -161,15 +161,12 @@ const History = () => {
                   <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3">
                     Duration
                   </th>
-                  <th className="text-right text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3">
-                    Actions
-                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
+                    <td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <Loader2 className="h-6 w-6 animate-spin text-primary" />
                         <span>Loading migration history...</span>
@@ -178,7 +175,7 @@ const History = () => {
                   </tr>
                 ) : filteredHistory.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
+                    <td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">
                       No migrations found matching your criteria.
                     </td>
                   </tr>
@@ -236,24 +233,6 @@ const History = () => {
                         <td className="px-4 py-4 text-sm text-muted-foreground">{formatDate(item.StartedAt)}</td>
                         <td className="px-4 py-4 text-sm text-muted-foreground">
                           {duration !== null ? `${duration} min` : "—"}
-                        </td>
-                        <td className="px-4 py-4 text-right">
-                          {statusStr === "completed" && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              // Uses a dummy route for now until Power BI is linked
-                              onClick={() => navigate(`/report/${item.Id}`)}
-                            >
-                              <ExternalLink className="w-4 h-4 mr-1" />
-                              View
-                            </Button>
-                          )}
-                          {statusStr === "failed" && (
-                            <Button variant="ghost" size="sm" className="text-destructive">
-                              Retry
-                            </Button>
-                          )}
                         </td>
                       </tr>
                     );
