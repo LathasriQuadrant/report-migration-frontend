@@ -165,7 +165,7 @@ export default function Migration() {
       // ── Step 3 – Dataset & Report Creation (2 real API calls) ──
       updateStep(2, "running", "Migrating to Lakehouse…");
       try {
-        const fileName = `${reportName}.twbx`;
+        const fileName = reportName.toLowerCase().endsWith(".twbx") ? reportName : `${reportName}.twbx`;
 
         // 3a) Lakehouse migrate with retry logic
         const lakehouseBody: Record<string, string> = { file_name: fileName, workspace_id: workspaceId };
