@@ -67,7 +67,7 @@ const Dashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   // 2. FIXED VARIABLE: Change this later when user auth is ready!
-  const CURRENT_USER_EMAIL = "dummy@dummy.com";
+  const CURRENT_USER_EMAIL = sessionStorage.getItem("azure_user_email") || "dummy@dummy.com";
 
   // 3. Fetch data from your live Azure Backend
   useEffect(() => {
