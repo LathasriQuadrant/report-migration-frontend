@@ -620,58 +620,63 @@ export default function PowerBIReport() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-4 p-6 h-full">
-        {/* Header Section */}
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/migration")}>
-            <ArrowLeft />
-          </Button>
-          <h1 className="text-2xl font-bold">Report Preview</h1>
+      <div className="max-w-7xl mx-auto h-full flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" onClick={() => navigate("/migration")}>
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <div>
+              <h1 className="text-xl font-bold">Report Preview</h1>
+              <p className="text-sm text-muted-foreground">{rawReportName || "Power BI Report"}</p>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          {statusType === "success" && (
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleRefreshNow} disabled={refreshing}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
+                {refreshing ? "Refreshing..." : "Refresh"}
+              </Button>
+              <Button size="sm" onClick={() => setScheduleOpen(true)} className="gap-2">
+                <Clock className="h-4 w-4" />
+                Schedule Refresh
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Status Bar */}
         <div
-          className={`flex items-center gap-3 p-4 rounded-lg border shadow-sm transition-all duration-300 ${
+          className={`flex items-center gap-3 p-3 rounded-lg border mb-4 flex-shrink-0 transition-all duration-300 ${
             statusType === "error"
-              ? "bg-red-50 border-red-200 text-red-700"
+              ? "status-failed"
               : statusType === "success"
-                ? "bg-green-50 border-green-200 text-green-700"
+                ? "status-completed"
                 : statusType === "warning"
-                  ? "bg-amber-50 border-amber-200 text-amber-700"
-                  : "bg-white border-blue-100 text-slate-700"
+                  ? "bg-warning/10 text-warning border-warning/20"
+                  : "status-running"
           }`}
         >
-          {statusType === "loading" && <Loader2 className="h-5 w-5 animate-spin text-blue-500" />}
-          {statusType === "success" && <CheckCircle2 className="h-5 w-5 text-green-600" />}
-          {statusType === "error" && <XCircle className="h-5 w-5 text-red-600" />}
-          {statusType === "warning" && <AlertTriangle className="h-5 w-5 text-amber-600" />}
+          {statusType === "loading" && <Loader2 className="h-4 w-4 animate-spin" />}
+          {statusType === "success" && <CheckCircle2 className="h-4 w-4" />}
+          {statusType === "error" && <XCircle className="h-4 w-4" />}
+          {statusType === "warning" && <AlertTriangle className="h-4 w-4" />}
 
           <div className="flex flex-col flex-1">
-            <span className="text-sm font-semibold uppercase tracking-wider opacity-70">System Status</span>
-            <span className="font-medium">{status}</span>
+            <span className="text-xs font-semibold uppercase tracking-wider opacity-70">System Status</span>
+            <span className="text-sm font-medium">{status}</span>
           </div>
-          <div className="flex items-center gap-2 px-3 py-1 bg-white/50 rounded-full border border-black/5 text-xs font-medium">
+          <div className="flex items-center gap-2 px-3 py-1 bg-background/50 rounded-full border border-border text-xs font-medium text-muted-foreground">
             <Globe className="h-3 w-3" />
             Config Source: {source}
           </div>
         </div>
 
-        {/* Refresh Buttons - shown after success */}
-        {statusType === "success" && (
-          <div className="flex justify-end gap-2">
-            <Button onClick={handleRefreshNow} disabled={refreshing} variant="outline" className="gap-2">
-              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-              {refreshing ? "Refreshing..." : "Refresh Now"}
-            </Button>
-            <Button onClick={() => setScheduleOpen(true)} className="gap-2">
-              <Clock className="h-4 w-4" />
-              Schedule Refresh
-            </Button>
-          </div>
-        )}
-
         {/* Power BI Container */}
-        <div className="relative flex-1 w-full min-h-[600px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="bg-card rounded-xl border border-border enterprise-shadow flex-1 min-h-[600px] overflow-hidden">
           <div ref={containerRef} className="h-full w-full" />
         </div>
       </div>
