@@ -104,7 +104,13 @@ const Dashboard = () => {
 
   const handleSourceClick = (sourceId: string) => {
     if (sourceId === "tableau") {
-      setShowTableauAuth(true);
+      // Skip auth modal if already signed into Tableau this session
+      const hasTableauSession = sessionStorage.getItem("tableau_api_token");
+      if (hasTableauSession) {
+        navigate("/explore/tableau");
+      } else {
+        setShowTableauAuth(true);
+      }
     } else {
       navigate(`/explore/${sourceId}`);
     }
