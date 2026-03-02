@@ -64,7 +64,7 @@ export default function PowerBIReport() {
 
   const userToken = sessionStorage.getItem("access_token");
 
-  const LAKEHOUSE_API = "https://live-data-lakehouse-erbghyatb6f4awgf.eastus-01.azurewebsites.net/api/v1/lakehouse";
+  const BACKEND_BASE_URL = "https://accesstokens-aecjbzaqaqcuh6bd.eastus-01.azurewebsites.net";
 
   const handleScheduleRefresh = async () => {
     const minutes = parseInt(intervalMinutes, 10);
@@ -73,14 +73,39 @@ export default function PowerBIReport() {
       return;
     }
 
-    const workbookName = rawReportName;
+    if (!datasetId || !workspaceId) {
+      toast({ title: "Missing data", description: "Dataset ID or Workspace ID not found.", variant: "destructive" });
+      return;
+    }
+
+    // Convert minutes to schedule times (Power BI uses specific time slots)
+    // Generate times spread across the day based on the interval
+    const times: string[] = [];
+    for (let m = 0; m < 24 * 60; m += minutes) {
+      const h = Math.floor(m / 60).toString().padStart(2, "0");
+      const min = (m % 60).toString().padStart(2, "0");
+      times.push(`${h}:${min}`);
+    }
+    // Power BI limits to 48 time slots per day
+    const limitedTimes = times.slice(0, 48);
+
     setScheduling(true);
     try {
-      const res = await fetch(`${LAKEHOUSE_API}/refresh/${encodeURIComponent(workbookName)}/schedule`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ interval_minutes: minutes, enable_scheduled_refresh: true }),
-      });
+      const res = await fetch(
+        `${BACKEND_BASE_URL}/datasets/${encodeURIComponent(datasetId)}/refresh-schedule?workspace_id=${encodeURIComponent(workspaceId)}`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            enabled: true,
+            days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+            times: limitedTimes,
+            timeZone: "UTC",
+            notifyOption: "MailOnFailure",
+          }),
+        }
+      );
 
       if (!res.ok) {
         const errText = await res.text();
@@ -97,20 +122,28 @@ export default function PowerBIReport() {
   };
 
   const handleRefreshNow = async () => {
-    const workbookName = rawReportName;
+    if (!datasetId || !workspaceId) {
+      toast({ title: "Missing data", description: "Dataset ID or Workspace ID not found.", variant: "destructive" });
+      return;
+    }
+
     setRefreshing(true);
     try {
-      const res = await fetch(`${LAKEHOUSE_API}/refresh/${encodeURIComponent(workbookName)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
+      const res = await fetch(
+        `${BACKEND_BASE_URL}/datasets/${encodeURIComponent(datasetId)}/refresh?workspace_id=${encodeURIComponent(workspaceId)}`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+        }
+      );
 
       if (!res.ok) {
         const errText = await res.text();
         throw new Error(errText || `HTTP ${res.status}`);
       }
 
-      toast({ title: "Refresh triggered", description: `Refresh started for "${workbookName}".` });
+      toast({ title: "Refresh triggered", description: `Refresh started for dataset.` });
     } catch (err: any) {
       toast({ title: "Refresh failed", description: err.message, variant: "destructive" });
     } finally {
