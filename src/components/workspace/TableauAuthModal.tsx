@@ -95,6 +95,7 @@ const TableauAuthModal = ({ isOpen, onSuccess, onCancel }: TableauAuthModalProps
       const tableauTree = buildTableauTree(backendData);
 
       sessionStorage.setItem("tableau_tree", JSON.stringify(tableauTree));
+      sessionStorage.setItem("local_authenticated", "true");
 
       setAuthState("success");
 
