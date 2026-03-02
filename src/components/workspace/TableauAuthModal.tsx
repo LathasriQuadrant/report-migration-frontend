@@ -66,6 +66,9 @@ const TableauAuthModal = ({ isOpen, onSuccess, onCancel }: TableauAuthModalProps
       }
 
       sessionStorage.setItem("tableau_api_token", signinData.api_token);
+      // Set auth flags IMMEDIATELY so AppLayout won't redirect during the slow fetch
+      sessionStorage.setItem("local_authenticated", "true");
+      sessionStorage.setItem("powerbi_authenticated", "true");
 
       /* ===============================
          2️⃣ FETCH ALL TABLEAU DATA
@@ -95,7 +98,6 @@ const TableauAuthModal = ({ isOpen, onSuccess, onCancel }: TableauAuthModalProps
       const tableauTree = buildTableauTree(backendData);
 
       sessionStorage.setItem("tableau_tree", JSON.stringify(tableauTree));
-      sessionStorage.setItem("local_authenticated", "true");
 
       setAuthState("success");
 
