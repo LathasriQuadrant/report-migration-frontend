@@ -86,6 +86,7 @@ const DestinationWorkspaceSelection = () => {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
+  const [creationProgress, setCreationProgress] = useState("");
 
   // Get auth state from context
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
@@ -254,22 +255,41 @@ const DestinationWorkspaceSelection = () => {
 
     try {
       setIsCreatingWorkspace(true);
+      setCreationProgress("Creating workspace...");
 
       const payload = {
         workspace_name: newWorkspaceName.trim(),
         capacity_id: selectedCapacityId,
       };
       console.log("Creating workspace with payload:", JSON.stringify(payload));
-      console.log("POST URL:", `${BACKEND_BASE_URL}/workspaces/with-capacity`);
+
+      // Progress timer — backend can take 3+ minutes (create → assign → verify)
+      const progressSteps = [
+        { time: 5000, msg: "Creating workspace..." },
+        { time: 15000, msg: "Assigning to capacity..." },
+        { time: 30000, msg: "Waiting for capacity assignment (this may take a minute)..." },
+        { time: 60000, msg: "Still assigning capacity, please wait..." },
+        { time: 90000, msg: "Verifying capacity assignment..." },
+        { time: 120000, msg: "Almost done, verifying workspace..." },
+        { time: 150000, msg: "Final verification in progress..." },
+      ];
+      const timers = progressSteps.map((step) =>
+        setTimeout(() => setCreationProgress(step.msg), step.time)
+      );
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 240000); // 4 min timeout
 
       const response = await fetch(`${BACKEND_BASE_URL}/workspaces/with-capacity`, {
         method: "POST",
         credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
+      timers.forEach(clearTimeout);
 
       console.log("Create workspace response status:", response.status);
       const rawText = await response.text();
@@ -282,7 +302,7 @@ const DestinationWorkspaceSelection = () => {
 
       toast({
         title: "Workspace Created",
-        description: `Workspace "${newWorkspaceName}" created and assigned to capacity successfully`,
+        description: `"${result.workspaceName || newWorkspaceName}" created and assigned to capacity successfully`,
       });
 
       setIsCreateDialogOpen(false);
@@ -290,13 +310,19 @@ const DestinationWorkspaceSelection = () => {
       setSelectedCapacityId("");
       fetchWorkspaces(true);
     } catch (err) {
+      const message = err instanceof Error
+        ? err.name === "AbortError"
+          ? "Request timed out. The workspace may still be creating — check Power BI portal."
+          : err.message
+        : "Unable to create workspace";
       toast({
         title: "Creation Failed",
-        description: err instanceof Error ? err.message : "Unable to create workspace",
+        description: message,
         variant: "destructive",
       });
     } finally {
       setIsCreatingWorkspace(false);
+      setCreationProgress("");
     }
   };
 
@@ -847,7 +873,14 @@ const DestinationWorkspaceSelection = () => {
               onClick={handleCreateWorkspace}
               disabled={isCreatingWorkspace || !selectedCapacityId || !newWorkspaceName.trim()}
             >
-              {isCreatingWorkspace ? "Creating..." : "Create"}
+              {isCreatingWorkspace ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  {creationProgress || "Creating..."}
+                </span>
+              ) : (
+                "Create"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
