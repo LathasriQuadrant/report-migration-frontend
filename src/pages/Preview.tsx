@@ -127,7 +127,7 @@ export default function PowerBIReport() {
           method: "PATCH",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ value: schedulePayload }),
+          body: JSON.stringify(schedulePayload),
         }
       );
 
