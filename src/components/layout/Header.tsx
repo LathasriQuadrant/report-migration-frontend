@@ -10,10 +10,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import ProfileDialog from './ProfileDialog';
+import { useState } from 'react';
 
 const Header = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [showProfile, setShowProfile] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -30,6 +33,7 @@ const Header = () => {
   };
 
   return (
+    <>
     <header className="h-14 border-b border-border bg-card px-6 flex items-center justify-between sticky top-0 z-50">
       <Link to="/" className="flex items-center gap-3">
         <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
@@ -58,7 +62,7 @@ const Header = () => {
               <p className="text-xs text-muted-foreground">{user?.email}</p>
             </div>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setShowProfile(true)}>
               <User className="w-4 h-4 mr-2" />
               Profile
             </DropdownMenuItem>
@@ -75,6 +79,9 @@ const Header = () => {
         </DropdownMenu>
       </div>
     </header>
+
+    <ProfileDialog open={showProfile} onOpenChange={setShowProfile} />
+    </>
   );
 };
 
