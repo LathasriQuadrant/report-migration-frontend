@@ -16,7 +16,8 @@ const PowerBIAuthSuccess = () => {
   useEffect(() => {
     const verifyAndRedirect = async () => {
       // Extract user profile from query parameters
-      const name = searchParams.get("name") || "User";
+      const rawName = searchParams.get("name") || "User";
+      const name = rawName.replace(/\s*\(.*?\)\s*$/, "").trim();
       const email = searchParams.get("email") || "";
       const oid = searchParams.get("oid") || "";
       const tenant = searchParams.get("tenant") || "";

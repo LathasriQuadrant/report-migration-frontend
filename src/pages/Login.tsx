@@ -29,7 +29,8 @@ const Login = () => {
       if (userDetails) {
         const { name, email, oid, tenant } = JSON.parse(userDetails);
         sessionStorage.setItem("powerbi_authenticated", "true");
-        sessionStorage.setItem("azure_user_name", name || "User");
+        const cleanName = (name || "User").replace(/\s*\(.*?\)\s*$/, "").trim();
+        sessionStorage.setItem("azure_user_name", cleanName);
         sessionStorage.setItem("azure_user_email", email || "");
         sessionStorage.setItem("azure_user_oid", oid || "");
         sessionStorage.setItem("azure_user_tenant", tenant || "");
