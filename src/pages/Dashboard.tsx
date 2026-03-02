@@ -71,7 +71,7 @@ const Dashboard = () => {
 
   // 3. Fetch data from your live Azure Backend
   useEffect(() => {
-    sessionStorage.removeItem("powerbi_authenticated");
+    // Don't clear powerbi_authenticated — it breaks auth state
     sessionStorage.removeItem("selected_workbook");
 
     const fetchJobs = async () => {
