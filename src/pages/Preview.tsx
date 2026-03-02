@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import AppLayout from "@/components/layout/AppLayout";
 
@@ -47,10 +48,16 @@ export default function PowerBIReport() {
   const [source, setSource] = useState<"API" | "None">("None");
 
   const [scheduleOpen, setScheduleOpen] = useState(false);
-  const [intervalMode, setIntervalMode] = useState<"preset" | "custom">("preset");
-  const [intervalMinutes, setIntervalMinutes] = useState("30");
   const [scheduling, setScheduling] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
+  const allDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  const [selectedDays, setSelectedDays] = useState<string[]>([...allDays]);
+  const [selectedTimes, setSelectedTimes] = useState<string[]>(["08:00"]);
+  const [timeInput, setTimeInput] = useState("08:00");
+  const [selectedTimezone, setSelectedTimezone] = useState("UTC");
+  const [notifyOption, setNotifyOption] = useState("MailOnFailure");
+  const [scheduleEnabled, setScheduleEnabled] = useState(true);
 
   const isEmbedding = useRef(false);
   const executed = useRef(false);
@@ -66,28 +73,39 @@ export default function PowerBIReport() {
 
   const BACKEND_BASE_URL = "https://accesstokens-aecjbzaqaqcuh6bd.eastus-01.azurewebsites.net";
 
+  const toggleDay = (day: string) => {
+    setSelectedDays(prev =>
+      prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
+    );
+  };
+
+  const addTime = () => {
+    if (timeInput && !selectedTimes.includes(timeInput)) {
+      if (selectedTimes.length >= 48) {
+        toast({ title: "Limit reached", description: "Power BI allows a maximum of 48 time slots per day.", variant: "destructive" });
+        return;
+      }
+      setSelectedTimes(prev => [...prev, timeInput].sort());
+    }
+  };
+
+  const removeTime = (time: string) => {
+    setSelectedTimes(prev => prev.filter(t => t !== time));
+  };
+
   const handleScheduleRefresh = async () => {
-    const minutes = parseInt(intervalMinutes, 10);
-    if (isNaN(minutes) || minutes < 1) {
-      toast({ title: "Invalid interval", description: "Please enter a valid number of minutes (≥ 1).", variant: "destructive" });
+    if (selectedDays.length === 0) {
+      toast({ title: "No days selected", description: "Please select at least one day.", variant: "destructive" });
       return;
     }
-
+    if (selectedTimes.length === 0) {
+      toast({ title: "No times selected", description: "Please add at least one refresh time.", variant: "destructive" });
+      return;
+    }
     if (!datasetId || !workspaceId) {
       toast({ title: "Missing data", description: "Dataset ID or Workspace ID not found.", variant: "destructive" });
       return;
     }
-
-    // Convert minutes to schedule times (Power BI uses specific time slots)
-    // Generate times spread across the day based on the interval
-    const times: string[] = [];
-    for (let m = 0; m < 24 * 60; m += minutes) {
-      const h = Math.floor(m / 60).toString().padStart(2, "0");
-      const min = (m % 60).toString().padStart(2, "0");
-      times.push(`${h}:${min}`);
-    }
-    // Power BI limits to 48 time slots per day
-    const limitedTimes = times.slice(0, 48);
 
     setScheduling(true);
     try {
@@ -98,11 +116,11 @@ export default function PowerBIReport() {
           credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            enabled: true,
-            days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
-            times: limitedTimes,
-            timeZone: "UTC",
-            notifyOption: "MailOnFailure",
+            enabled: scheduleEnabled,
+            days: selectedDays,
+            times: selectedTimes,
+            timeZone: selectedTimezone,
+            notifyOption: notifyOption,
           }),
         }
       );
@@ -112,7 +130,7 @@ export default function PowerBIReport() {
         throw new Error(errText || `HTTP ${res.status}`);
       }
 
-      toast({ title: "Schedule set", description: `Refresh scheduled every ${minutes} minutes.` });
+      toast({ title: "Schedule set", description: `Refresh scheduled on ${selectedDays.length} day(s) at ${selectedTimes.length} time(s).` });
       setScheduleOpen(false);
     } catch (err: any) {
       toast({ title: "Schedule failed", description: err.message, variant: "destructive" });
@@ -711,59 +729,110 @@ export default function PowerBIReport() {
 
       {/* Schedule Refresh Dialog */}
       <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Schedule Refresh</DialogTitle>
             <DialogDescription>
-              Set the refresh interval for <strong>{rawReportName}</strong>
+              Configure the refresh schedule for <strong>{rawReportName}</strong>
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
-            <div className="flex gap-2">
-              <Button
-                variant={intervalMode === "preset" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setIntervalMode("preset")}
-              >
-                Preset
-              </Button>
-              <Button
-                variant={intervalMode === "custom" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setIntervalMode("custom")}
-              >
-                Custom
-              </Button>
+          <div className="space-y-5 py-2 max-h-[60vh] overflow-y-auto">
+            {/* Enable/Disable */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Enable Schedule</span>
+              <Switch checked={scheduleEnabled} onCheckedChange={setScheduleEnabled} />
             </div>
 
-            {intervalMode === "preset" ? (
-              <Select value={intervalMinutes} onValueChange={setIntervalMinutes}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select interval" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="15">Every 15 minutes</SelectItem>
-                  <SelectItem value="30">Every 30 minutes</SelectItem>
-                  <SelectItem value="60">Every 1 hour</SelectItem>
-                  <SelectItem value="120">Every 2 hours</SelectItem>
-                  <SelectItem value="360">Every 6 hours</SelectItem>
-                  <SelectItem value="720">Every 12 hours</SelectItem>
-                  <SelectItem value="1440">Every 24 hours</SelectItem>
-                </SelectContent>
-              </Select>
-            ) : (
+            {/* Days Selection */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Days</label>
+              <div className="flex flex-wrap gap-2">
+                {allDays.map(day => (
+                  <Button
+                    key={day}
+                    type="button"
+                    size="sm"
+                    variant={selectedDays.includes(day) ? "default" : "outline"}
+                    onClick={() => toggleDay(day)}
+                    className="text-xs"
+                  >
+                    {day.slice(0, 3)}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Times Selection */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Refresh Times ({selectedTimes.length}/48)</label>
               <div className="flex items-center gap-2">
                 <Input
-                  type="number"
-                  min={1}
-                  placeholder="Enter minutes"
-                  value={intervalMinutes}
-                  onChange={(e) => setIntervalMinutes(e.target.value)}
+                  type="time"
+                  value={timeInput}
+                  onChange={(e) => setTimeInput(e.target.value)}
+                  className="w-36"
                 />
-                <span className="text-sm text-muted-foreground whitespace-nowrap">minutes</span>
+                <Button type="button" size="sm" onClick={addTime} variant="outline">
+                  Add
+                </Button>
               </div>
-            )}
+              {selectedTimes.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {selectedTimes.map(time => (
+                    <span
+                      key={time}
+                      className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-primary/10 text-primary border border-primary/20"
+                    >
+                      {time}
+                      <button
+                        type="button"
+                        onClick={() => removeTime(time)}
+                        className="hover:text-destructive"
+                      >
+                        <XCircle className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Timezone */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Timezone</label>
+              <Select value={selectedTimezone} onValueChange={setSelectedTimezone}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="UTC">UTC</SelectItem>
+                  <SelectItem value="Eastern Standard Time">Eastern (US)</SelectItem>
+                  <SelectItem value="Central Standard Time">Central (US)</SelectItem>
+                  <SelectItem value="Mountain Standard Time">Mountain (US)</SelectItem>
+                  <SelectItem value="Pacific Standard Time">Pacific (US)</SelectItem>
+                  <SelectItem value="GMT Standard Time">GMT (UK)</SelectItem>
+                  <SelectItem value="Central European Standard Time">Central European</SelectItem>
+                  <SelectItem value="India Standard Time">India (IST)</SelectItem>
+                  <SelectItem value="AUS Eastern Standard Time">Australia Eastern</SelectItem>
+                  <SelectItem value="Tokyo Standard Time">Tokyo (JST)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Notification */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Notification</label>
+              <Select value={notifyOption} onValueChange={setNotifyOption}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="MailOnFailure">Email on Failure</SelectItem>
+                  <SelectItem value="NoNotification">No Notification</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <DialogFooter>
