@@ -94,11 +94,11 @@ export default function PowerBIReport() {
   };
 
   const handleScheduleRefresh = async () => {
-    if (selectedDays.length === 0) {
+    if (scheduleEnabled && selectedDays.length === 0) {
       toast({ title: "No days selected", description: "Please select at least one day.", variant: "destructive" });
       return;
     }
-    if (selectedTimes.length === 0) {
+    if (scheduleEnabled && selectedTimes.length === 0) {
       toast({ title: "No times selected", description: "Please add at least one refresh time.", variant: "destructive" });
       return;
     }
@@ -109,19 +109,25 @@ export default function PowerBIReport() {
 
     setScheduling(true);
     try {
+      // Power BI API requires payload wrapped in "value".
+      // When disabling, send only { enabled: false } with no other fields.
+      const schedulePayload = scheduleEnabled
+        ? {
+            enabled: true,
+            days: selectedDays,
+            times: selectedTimes,
+            timeZone: selectedTimezone,
+            notifyOption: notifyOption,
+          }
+        : { enabled: false };
+
       const res = await fetch(
         `${BACKEND_BASE_URL}/datasets/${encodeURIComponent(datasetId)}/refresh-schedule?workspace_id=${encodeURIComponent(workspaceId)}`,
         {
           method: "PATCH",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            enabled: scheduleEnabled,
-            days: selectedDays,
-            times: selectedTimes,
-            timeZone: selectedTimezone,
-            notifyOption: notifyOption,
-          }),
+          body: JSON.stringify({ value: schedulePayload }),
         }
       );
 
