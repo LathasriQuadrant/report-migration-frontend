@@ -67,42 +67,28 @@ export default function PowerBIReport() {
 
   const BACKEND_BASE_URL = "https://accesstokens-aecjbzaqaqcuh6bd.eastus-01.azurewebsites.net";
 
-  // Generate times array from interval (e.g., every 60 min = ["00:00","01:00",...])
-  const generateTimesFromInterval = (intervalMinutes: number): string[] => {
-    const times: string[] = [];
-    for (let m = 0; m < 24 * 60; m += intervalMinutes) {
-      const h = String(Math.floor(m / 60)).padStart(2, "0");
-      const min = String(m % 60).padStart(2, "0");
-      times.push(`${h}:${min}`);
-    }
-    return times;
-  };
-
   const handleScheduleRefresh = async () => {
-    if (!datasetId || !workspaceId) {
-      toast({ title: "Missing data", description: "Dataset ID or Workspace ID not found.", variant: "destructive" });
+    if (!rawReportName) {
+      toast({ title: "Missing data", description: "Workbook name not found.", variant: "destructive" });
       return;
     }
 
     setScheduling(true);
     try {
-      const schedulePayload = scheduleEnabled
-        ? {
-            enabled: true,
-            days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
-            times: generateTimesFromInterval(Number(refreshInterval)),
-            timeZone: "UTC",
-            notifyOption: "MailOnFailure",
-          }
-        : { enabled: false };
+      const payload: Record<string, any> = {
+        enable_scheduled_refresh: scheduleEnabled,
+      };
+      if (scheduleEnabled) {
+        payload.interval_minutes = Number(refreshInterval);
+      }
 
       const res = await fetch(
-        `${BACKEND_BASE_URL}/datasets/${encodeURIComponent(datasetId)}/refresh-schedule?workspace_id=${encodeURIComponent(workspaceId)}`,
+        `${BACKEND_BASE_URL}/refresh/${encodeURIComponent(rawReportName)}/schedule`,
         {
           method: "PATCH",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ value: schedulePayload }),
+          body: JSON.stringify(payload),
         }
       );
 
@@ -114,7 +100,7 @@ export default function PowerBIReport() {
       toast({
         title: scheduleEnabled ? "Schedule enabled" : "Schedule disabled",
         description: scheduleEnabled
-          ? `Refreshing every ${refreshInterval} minutes, all days.`
+          ? `Refreshing every ${refreshInterval} minutes.`
           : "Scheduled refresh has been turned off.",
       });
       setScheduleOpen(false);
@@ -744,6 +730,9 @@ export default function PowerBIReport() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                     <SelectItem value="5">Every 5 minutes</SelectItem>
+                    <SelectItem value="10">Every 10 minutes</SelectItem>
+                    <SelectItem value="15">Every 15 minutes</SelectItem>
                     <SelectItem value="30">Every 30 minutes</SelectItem>
                     <SelectItem value="60">Every 1 hour</SelectItem>
                     <SelectItem value="120">Every 2 hours</SelectItem>
