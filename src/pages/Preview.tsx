@@ -83,7 +83,7 @@ export default function PowerBIReport() {
       }
 
       const res = await fetch(
-        `${BACKEND_BASE_URL}/refresh/${encodeURIComponent(rawReportName)}/schedule`,
+        `https://live-data-lakehouse-erbghyatb6f4awgf.eastus-01.azurewebsites.net/refresh/${encodeURIComponent(rawReportName)}/schedule`,
         {
           method: "PATCH",
           credentials: "include",
