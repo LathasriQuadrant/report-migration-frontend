@@ -5,7 +5,6 @@ import { service, factories } from "powerbi-client";
 import { Loader2, CheckCircle2, XCircle, Globe, AlertTriangle, ArrowLeft, Clock, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
@@ -51,13 +50,8 @@ export default function PowerBIReport() {
   const [scheduling, setScheduling] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  const allDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-  const [selectedDays, setSelectedDays] = useState<string[]>([...allDays]);
-  const [selectedTimes, setSelectedTimes] = useState<string[]>(["08:00"]);
-  const [timeInput, setTimeInput] = useState("08:00");
-  const [selectedTimezone, setSelectedTimezone] = useState("UTC");
-  const [notifyOption, setNotifyOption] = useState("MailOnFailure");
-  const [scheduleEnabled, setScheduleEnabled] = useState(true);
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [refreshInterval, setRefreshInterval] = useState("60"); // minutes
 
   const isEmbedding = useRef(false);
   const executed = useRef(false);
@@ -73,35 +67,18 @@ export default function PowerBIReport() {
 
   const BACKEND_BASE_URL = "https://accesstokens-aecjbzaqaqcuh6bd.eastus-01.azurewebsites.net";
 
-  const toggleDay = (day: string) => {
-    setSelectedDays(prev =>
-      prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
-    );
-  };
-
-  const addTime = () => {
-    if (timeInput && !selectedTimes.includes(timeInput)) {
-      if (selectedTimes.length >= 48) {
-        toast({ title: "Limit reached", description: "Power BI allows a maximum of 48 time slots per day.", variant: "destructive" });
-        return;
-      }
-      setSelectedTimes(prev => [...prev, timeInput].sort());
+  // Generate times array from interval (e.g., every 60 min = ["00:00","01:00",...])
+  const generateTimesFromInterval = (intervalMinutes: number): string[] => {
+    const times: string[] = [];
+    for (let m = 0; m < 24 * 60; m += intervalMinutes) {
+      const h = String(Math.floor(m / 60)).padStart(2, "0");
+      const min = String(m % 60).padStart(2, "0");
+      times.push(`${h}:${min}`);
     }
-  };
-
-  const removeTime = (time: string) => {
-    setSelectedTimes(prev => prev.filter(t => t !== time));
+    return times;
   };
 
   const handleScheduleRefresh = async () => {
-    if (scheduleEnabled && selectedDays.length === 0) {
-      toast({ title: "No days selected", description: "Please select at least one day.", variant: "destructive" });
-      return;
-    }
-    if (scheduleEnabled && selectedTimes.length === 0) {
-      toast({ title: "No times selected", description: "Please add at least one refresh time.", variant: "destructive" });
-      return;
-    }
     if (!datasetId || !workspaceId) {
       toast({ title: "Missing data", description: "Dataset ID or Workspace ID not found.", variant: "destructive" });
       return;
@@ -109,15 +86,13 @@ export default function PowerBIReport() {
 
     setScheduling(true);
     try {
-      // Power BI API requires payload wrapped in "value".
-      // When disabling, send only { enabled: false } with no other fields.
       const schedulePayload = scheduleEnabled
         ? {
             enabled: true,
-            days: selectedDays,
-            times: selectedTimes,
-            timeZone: selectedTimezone,
-            notifyOption: notifyOption,
+            days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+            times: generateTimesFromInterval(Number(refreshInterval)),
+            timeZone: "UTC",
+            notifyOption: "MailOnFailure",
           }
         : { enabled: false };
 
@@ -136,7 +111,12 @@ export default function PowerBIReport() {
         throw new Error(errText || `HTTP ${res.status}`);
       }
 
-      toast({ title: "Schedule set", description: `Refresh scheduled on ${selectedDays.length} day(s) at ${selectedTimes.length} time(s).` });
+      toast({
+        title: scheduleEnabled ? "Schedule enabled" : "Schedule disabled",
+        description: scheduleEnabled
+          ? `Refreshing every ${refreshInterval} minutes, all days.`
+          : "Scheduled refresh has been turned off.",
+      });
       setScheduleOpen(false);
     } catch (err: any) {
       toast({ title: "Schedule failed", description: err.message, variant: "destructive" });
@@ -743,102 +723,41 @@ export default function PowerBIReport() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-5 py-2 max-h-[60vh] overflow-y-auto">
-            {/* Enable/Disable */}
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Enable Schedule</span>
+          <div className="space-y-5 py-2">
+            {/* Enable/Disable Toggle */}
+            <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
+              <div className="space-y-1">
+                <span className="text-sm font-medium">Enable Scheduled Refresh</span>
+                <p className="text-xs text-muted-foreground">
+                  {scheduleEnabled ? "Refresh is active" : "Refresh is turned off"}
+                </p>
+              </div>
               <Switch checked={scheduleEnabled} onCheckedChange={setScheduleEnabled} />
             </div>
 
-            {/* Days Selection */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Days</label>
-              <div className="flex flex-wrap gap-2">
-                {allDays.map(day => (
-                  <Button
-                    key={day}
-                    type="button"
-                    size="sm"
-                    variant={selectedDays.includes(day) ? "default" : "outline"}
-                    onClick={() => toggleDay(day)}
-                    className="text-xs"
-                  >
-                    {day.slice(0, 3)}
-                  </Button>
-                ))}
+            {/* Time Interval - only shown when enabled */}
+            {scheduleEnabled && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Refresh Interval</label>
+                <Select value={refreshInterval} onValueChange={setRefreshInterval}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="30">Every 30 minutes</SelectItem>
+                    <SelectItem value="60">Every 1 hour</SelectItem>
+                    <SelectItem value="120">Every 2 hours</SelectItem>
+                    <SelectItem value="180">Every 3 hours</SelectItem>
+                    <SelectItem value="360">Every 6 hours</SelectItem>
+                    <SelectItem value="720">Every 12 hours</SelectItem>
+                    <SelectItem value="1440">Every 24 hours</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Runs every day at {Math.floor(24 * 60 / Number(refreshInterval))} time(s) per day (UTC).
+                </p>
               </div>
-            </div>
-
-            {/* Times Selection */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Refresh Times ({selectedTimes.length}/48)</label>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="time"
-                  value={timeInput}
-                  onChange={(e) => setTimeInput(e.target.value)}
-                  className="w-36"
-                />
-                <Button type="button" size="sm" onClick={addTime} variant="outline">
-                  Add
-                </Button>
-              </div>
-              {selectedTimes.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {selectedTimes.map(time => (
-                    <span
-                      key={time}
-                      className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-primary/10 text-primary border border-primary/20"
-                    >
-                      {time}
-                      <button
-                        type="button"
-                        onClick={() => removeTime(time)}
-                        className="hover:text-destructive"
-                      >
-                        <XCircle className="h-3 w-3" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Timezone */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Timezone</label>
-              <Select value={selectedTimezone} onValueChange={setSelectedTimezone}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="UTC">UTC</SelectItem>
-                  <SelectItem value="Eastern Standard Time">Eastern (US)</SelectItem>
-                  <SelectItem value="Central Standard Time">Central (US)</SelectItem>
-                  <SelectItem value="Mountain Standard Time">Mountain (US)</SelectItem>
-                  <SelectItem value="Pacific Standard Time">Pacific (US)</SelectItem>
-                  <SelectItem value="GMT Standard Time">GMT (UK)</SelectItem>
-                  <SelectItem value="Central European Standard Time">Central European</SelectItem>
-                  <SelectItem value="India Standard Time">India (IST)</SelectItem>
-                  <SelectItem value="AUS Eastern Standard Time">Australia Eastern</SelectItem>
-                  <SelectItem value="Tokyo Standard Time">Tokyo (JST)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Notification */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Notification</label>
-              <Select value={notifyOption} onValueChange={setNotifyOption}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="MailOnFailure">Email on Failure</SelectItem>
-                  <SelectItem value="NoNotification">No Notification</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            )}
           </div>
 
           <DialogFooter>
