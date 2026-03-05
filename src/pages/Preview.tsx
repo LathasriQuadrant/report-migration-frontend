@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import AppLayout from "@/components/layout/AppLayout";
 
@@ -51,7 +53,14 @@ export default function PowerBIReport() {
   const [refreshing, setRefreshing] = useState(false);
 
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
-  const [refreshInterval, setRefreshInterval] = useState("60"); // minutes
+  const [refreshInterval, setRefreshInterval] = useState("60"); // minutes for lakehouse
+
+  // Power BI schedule fields
+  const [scheduleDays, setScheduleDays] = useState<string[]>(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]);
+  const [scheduleTimes, setScheduleTimes] = useState<string[]>(["08:00"]);
+  const [newTime, setNewTime] = useState("08:00");
+  const [scheduleTimeZone, setScheduleTimeZone] = useState("UTC");
+  const [notifyOption, setNotifyOption] = useState("MailOnFailure");
 
   const isEmbedding = useRef(false);
   const executed = useRef(false);
@@ -76,30 +85,59 @@ export default function PowerBIReport() {
 
     setScheduling(true);
     try {
-      const payload = {
+      // 1. Hit Lakehouse schedule endpoint
+      const lakehousePayload = {
         interval_minutes: Number(refreshInterval),
         enable_scheduled_refresh: scheduleEnabled,
       };
 
-      const res = await fetch(
+      const lakehousePromise = fetch(
         `${LAKEHOUSE_BASE_URL}/refresh/${encodeURIComponent(rawReportName)}/schedule`,
         {
           method: "PATCH",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(lakehousePayload),
         }
       );
 
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(errText || `HTTP ${res.status}`);
+      // 2. Hit Power BI refresh schedule endpoint (accesstoken domain)
+      const pbiPayload = {
+        enabled: scheduleEnabled,
+        days: scheduleDays,
+        times: scheduleTimes,
+        timeZone: scheduleTimeZone,
+        notifyOption: notifyOption,
+      };
+
+      const pbiPromise = datasetId && workspaceId
+        ? fetch(
+            `${BACKEND_BASE_URL}/datasets/${encodeURIComponent(datasetId)}/refresh-schedule?workspace_id=${encodeURIComponent(workspaceId)}`,
+            {
+              method: "PATCH",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(pbiPayload),
+            }
+          )
+        : Promise.resolve(null);
+
+      const [lakehouseRes, pbiRes] = await Promise.all([lakehousePromise, pbiPromise]);
+
+      if (!lakehouseRes.ok) {
+        const errText = await lakehouseRes.text();
+        throw new Error(`Lakehouse: ${errText || `HTTP ${lakehouseRes.status}`}`);
+      }
+
+      if (pbiRes && !pbiRes.ok) {
+        const errText = await pbiRes.text();
+        console.warn("Power BI schedule warning:", errText);
       }
 
       toast({
         title: scheduleEnabled ? "Schedule enabled" : "Schedule disabled",
         description: scheduleEnabled
-          ? `Refreshing every ${refreshInterval} minutes.`
+          ? `Lakehouse: every ${refreshInterval} min · Power BI: ${scheduleTimes.join(", ")} on ${scheduleDays.length} day(s).`
           : "Scheduled refresh has been turned off.",
       });
       setScheduleOpen(false);
@@ -726,7 +764,7 @@ export default function PowerBIReport() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-5 py-2">
+          <div className="space-y-5 py-2 max-h-[60vh] overflow-y-auto">
             {/* Enable/Disable Toggle */}
             <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
               <div className="space-y-1">
@@ -738,31 +776,123 @@ export default function PowerBIReport() {
               <Switch checked={scheduleEnabled} onCheckedChange={setScheduleEnabled} />
             </div>
 
-            {/* Time Interval - only shown when enabled */}
+            {/* All schedule options - only shown when enabled */}
             {scheduleEnabled && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Refresh Interval</label>
-                <Select value={refreshInterval} onValueChange={setRefreshInterval}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                     <SelectItem value="5">Every 5 minutes</SelectItem>
-                    <SelectItem value="10">Every 10 minutes</SelectItem>
-                    <SelectItem value="15">Every 15 minutes</SelectItem>
-                    <SelectItem value="30">Every 30 minutes</SelectItem>
-                    <SelectItem value="60">Every 1 hour</SelectItem>
-                    <SelectItem value="120">Every 2 hours</SelectItem>
-                    <SelectItem value="180">Every 3 hours</SelectItem>
-                    <SelectItem value="360">Every 6 hours</SelectItem>
-                    <SelectItem value="720">Every 12 hours</SelectItem>
-                    <SelectItem value="1440">Every 24 hours</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Runs every day at {Math.floor(24 * 60 / Number(refreshInterval))} time(s) per day (UTC).
-                </p>
-              </div>
+              <>
+                {/* Lakehouse Interval */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Lakehouse Refresh Interval</label>
+                  <Select value={refreshInterval} onValueChange={setRefreshInterval}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">Every 5 minutes</SelectItem>
+                      <SelectItem value="10">Every 10 minutes</SelectItem>
+                      <SelectItem value="15">Every 15 minutes</SelectItem>
+                      <SelectItem value="30">Every 30 minutes</SelectItem>
+                      <SelectItem value="60">Every 1 hour</SelectItem>
+                      <SelectItem value="120">Every 2 hours</SelectItem>
+                      <SelectItem value="180">Every 3 hours</SelectItem>
+                      <SelectItem value="360">Every 6 hours</SelectItem>
+                      <SelectItem value="720">Every 12 hours</SelectItem>
+                      <SelectItem value="1440">Every 24 hours</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Days of the week */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Power BI Refresh Days</label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day) => (
+                      <label key={day} className="flex items-center gap-2 text-sm cursor-pointer">
+                        <Checkbox
+                          checked={scheduleDays.includes(day)}
+                          onCheckedChange={(checked) => {
+                            setScheduleDays((prev) =>
+                              checked ? [...prev, day] : prev.filter((d) => d !== day)
+                            );
+                          }}
+                        />
+                        <span>{day.slice(0, 3)}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Refresh Times */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Power BI Refresh Times (UTC)</label>
+                  <div className="flex flex-wrap gap-2">
+                    {scheduleTimes.map((t) => (
+                      <span key={t} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-sm">
+                        {t}
+                        <button
+                          type="button"
+                          className="text-muted-foreground hover:text-foreground"
+                          onClick={() => setScheduleTimes((prev) => prev.filter((x) => x !== t))}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      type="time"
+                      value={newTime}
+                      onChange={(e) => setNewTime(e.target.value)}
+                      className="w-32"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (newTime && !scheduleTimes.includes(newTime)) {
+                          setScheduleTimes((prev) => [...prev, newTime].sort());
+                        }
+                      }}
+                    >
+                      Add Time
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Time Zone */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Time Zone</label>
+                  <Select value={scheduleTimeZone} onValueChange={setScheduleTimeZone}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="UTC">UTC</SelectItem>
+                      <SelectItem value="Eastern Standard Time">Eastern (US)</SelectItem>
+                      <SelectItem value="Central Standard Time">Central (US)</SelectItem>
+                      <SelectItem value="Mountain Standard Time">Mountain (US)</SelectItem>
+                      <SelectItem value="Pacific Standard Time">Pacific (US)</SelectItem>
+                      <SelectItem value="India Standard Time">India (IST)</SelectItem>
+                      <SelectItem value="GMT Standard Time">GMT</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Notify Option */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Notification</label>
+                  <Select value={notifyOption} onValueChange={setNotifyOption}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="MailOnFailure">Email on failure</SelectItem>
+                      <SelectItem value="NoNotification">No notification</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
             )}
           </div>
 
