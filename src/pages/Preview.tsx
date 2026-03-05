@@ -103,15 +103,15 @@ export default function PowerBIReport() {
         interval_minutes: Number(refreshInterval),
         enable_scheduled_refresh: scheduleEnabled,
       };
-      const pbiPayload = {
-        value: {
-          enabled: scheduleEnabled,
-          days: scheduleDays,
-          times: scheduleTimes,
-          timeZone: scheduleTimeZone,
-          notifyOption: notifyOption,
-        },
+      // Send flat payload — backend wraps in {value:...} and sets notifyOption itself
+      const pbiPayload: Record<string, any> = {
+        enabled: scheduleEnabled,
+        times: scheduleTimes,
+        timeZone: scheduleTimeZone,
       };
+      if (scheduleDays.length > 0) {
+        pbiPayload.days = scheduleDays;
+      }
 
       const lakehouseUrl = `${LAKEHOUSE_BASE_URL}/refresh/${encodeURIComponent(rawReportName)}/schedule`;
       const pbiUrl = `${BACKEND_BASE_URL}/datasets/${encodeURIComponent(datasetId)}/refresh-schedule?workspace_id=${encodeURIComponent(workspaceId)}`;
