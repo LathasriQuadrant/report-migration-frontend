@@ -701,7 +701,7 @@ export default function PowerBIReport() {
           <div className="flex justify-end gap-2">
             <Button onClick={handleRefreshNow} disabled={refreshing} variant="outline" className="gap-2">
               <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-              {refreshing ? "Refreshing..." : "Refresh Now"}
+              {refreshing ? "Refreshing..." : "Refresh"}
             </Button>
             <Button onClick={() => setScheduleOpen(true)} className="gap-2">
               <Clock className="h-4 w-4" />
