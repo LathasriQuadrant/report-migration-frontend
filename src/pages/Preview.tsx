@@ -75,6 +75,7 @@ export default function PowerBIReport() {
   const userToken = sessionStorage.getItem("access_token");
 
   const BACKEND_BASE_URL = "https://accesstokens-aecjbzaqaqcuh6bd.eastus-01.azurewebsites.net";
+  const LAKEHOUSE_BASE_URL = "https://live-data-lakehouse-erbghyatb6f4awgf.eastus-01.azurewebsites.net";
   const handleScheduleRefresh = async () => {
     console.group("DEBUG: Schedule Refresh");
 
