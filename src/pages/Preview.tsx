@@ -84,7 +84,7 @@ export default function PowerBIReport() {
       }
 
       const res = await fetch(
-        `${BACKEND_BASE_URL}/refresh/${encodeURIComponent(rawReportName)}/schedule`,
+        `${LAKEHOUSE_BASE_URL}/refresh/${encodeURIComponent(rawReportName)}/schedule`,
         {
           method: "PATCH",
           credentials: "include",
