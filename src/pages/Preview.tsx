@@ -85,23 +85,11 @@ export default function PowerBIReport() {
 
     setScheduling(true);
     try {
-      // 1. Hit Lakehouse schedule endpoint
-      const lakehousePayload = {
-        interval_minutes: Number(refreshInterval),
-        enable_scheduled_refresh: scheduleEnabled,
-      };
+      if (!datasetId || !workspaceId) {
+        throw new Error("Dataset ID or Workspace ID not found.");
+      }
 
-      const lakehousePromise = fetch(
-        `${LAKEHOUSE_BASE_URL}/refresh/${encodeURIComponent(rawReportName)}/schedule`,
-        {
-          method: "PATCH",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(lakehousePayload),
-        }
-      );
-
-      // 2. Hit Power BI refresh schedule endpoint (accesstoken domain)
+      // Hit Power BI refresh schedule endpoint (accesstoken domain)
       const pbiPayload = {
         enabled: scheduleEnabled,
         days: scheduleDays,
@@ -110,34 +98,25 @@ export default function PowerBIReport() {
         notifyOption: notifyOption,
       };
 
-      const pbiPromise = datasetId && workspaceId
-        ? fetch(
-            `${BACKEND_BASE_URL}/datasets/${encodeURIComponent(datasetId)}/refresh-schedule?workspace_id=${encodeURIComponent(workspaceId)}`,
-            {
-              method: "PATCH",
-              credentials: "include",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(pbiPayload),
-            }
-          )
-        : Promise.resolve(null);
+      const pbiRes = await fetch(
+        `${BACKEND_BASE_URL}/datasets/${encodeURIComponent(datasetId)}/refresh-schedule?workspace_id=${encodeURIComponent(workspaceId)}`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(pbiPayload),
+        }
+      );
 
-      const [lakehouseRes, pbiRes] = await Promise.all([lakehousePromise, pbiPromise]);
-
-      if (!lakehouseRes.ok) {
-        const errText = await lakehouseRes.text();
-        throw new Error(`Lakehouse: ${errText || `HTTP ${lakehouseRes.status}`}`);
-      }
-
-      if (pbiRes && !pbiRes.ok) {
+      if (!pbiRes.ok) {
         const errText = await pbiRes.text();
-        console.warn("Power BI schedule warning:", errText);
+        throw new Error(errText || `HTTP ${pbiRes.status}`);
       }
 
       toast({
         title: scheduleEnabled ? "Schedule enabled" : "Schedule disabled",
         description: scheduleEnabled
-          ? `Lakehouse: every ${refreshInterval} min · Power BI: ${scheduleTimes.join(", ")} on ${scheduleDays.length} day(s).`
+          ? `Power BI: ${scheduleTimes.join(", ")} on ${scheduleDays.length} day(s) (${scheduleTimeZone}).`
           : "Scheduled refresh has been turned off.",
       });
       setScheduleOpen(false);
