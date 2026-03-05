@@ -895,6 +895,20 @@ export default function PowerBIReport() {
                   </Select>
                 </div>
 
+                {/* Lakehouse Refresh Interval */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Lakehouse Refresh Interval (minutes)</label>
+                  <p className="text-xs text-muted-foreground">How often the Lakehouse should refresh data</p>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={refreshInterval}
+                    onChange={(e) => setRefreshInterval(e.target.value)}
+                    className="w-32"
+                    placeholder="60"
+                  />
+                </div>
+
                 {/* Info note about notifications */}
                 <p className="text-xs text-muted-foreground italic">
                   Notifications are managed by the service principal (NoNotification).
