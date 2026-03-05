@@ -927,7 +927,16 @@ export default function PowerBIReport() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Lakehouse Refresh Interval</label>
                   <p className="text-xs text-muted-foreground">How often the Lakehouse should refresh data</p>
-                  <Select value={refreshInterval} onValueChange={setRefreshInterval}>
+                  <Select
+                    value={["5","10","15","30","60","120","360","720","1440"].includes(refreshInterval) ? refreshInterval : "custom"}
+                    onValueChange={(val) => {
+                      if (val === "custom") {
+                        setRefreshInterval("");
+                      } else {
+                        setRefreshInterval(val);
+                      }
+                    }}
+                  >
                     <SelectTrigger className="w-48">
                       <SelectValue placeholder="Select interval" />
                     </SelectTrigger>
@@ -941,8 +950,22 @@ export default function PowerBIReport() {
                       <SelectItem value="360">6 hours</SelectItem>
                       <SelectItem value="720">12 hours</SelectItem>
                       <SelectItem value="1440">24 hours</SelectItem>
+                      <SelectItem value="custom">Custom...</SelectItem>
                     </SelectContent>
                   </Select>
+                  {!["5","10","15","30","60","120","360","720","1440"].includes(refreshInterval) && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <Input
+                        type="number"
+                        min="1"
+                        value={refreshInterval}
+                        onChange={(e) => setRefreshInterval(e.target.value)}
+                        className="w-32"
+                        placeholder="Minutes"
+                      />
+                      <span className="text-sm text-muted-foreground">minutes</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Info note about notifications */}
