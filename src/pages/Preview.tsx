@@ -60,7 +60,7 @@ export default function PowerBIReport() {
   const [scheduleTimes, setScheduleTimes] = useState<string[]>(["08:00"]);
   const [newTime, setNewTime] = useState("08:00");
   const [scheduleTimeZone, setScheduleTimeZone] = useState("UTC");
-  const [notifyOption, setNotifyOption] = useState("MailOnFailure");
+  // notifyOption removed — backend forces "NoNotification" via Service Principal
 
   const isEmbedding = useRef(false);
   const executed = useRef(false);
@@ -76,19 +76,12 @@ export default function PowerBIReport() {
 
   const BACKEND_BASE_URL = "https://accesstokens-aecjbzaqaqcuh6bd.eastus-01.azurewebsites.net";
   const LAKEHOUSE_BASE_URL = "https://live-data-lakehouse-erbghyatb6f4awgf.eastus-01.azurewebsites.net";
-
   const handleScheduleRefresh = async () => {
     console.group("DEBUG: Schedule Refresh");
 
     // Step 1: Validate required session values
-    console.log("Step 1 — Session values:", { rawReportName, datasetId, workspaceId });
+    console.log("Step 1 — Session values:", { datasetId, workspaceId });
 
-    if (!rawReportName) {
-      console.error("Step 1 FAIL: rawReportName is missing");
-      console.groupEnd();
-      toast({ title: "Missing data", description: "Workbook name not found.", variant: "destructive" });
-      return;
-    }
     if (!datasetId || !workspaceId) {
       console.error("Step 1 FAIL: datasetId or workspaceId missing");
       console.groupEnd();
@@ -98,12 +91,7 @@ export default function PowerBIReport() {
 
     setScheduling(true);
     try {
-      // Step 2: Build payloads
-      const lakehousePayload = {
-        interval_minutes: Number(refreshInterval),
-        enable_scheduled_refresh: scheduleEnabled,
-      };
-      // Send flat payload — backend wraps in {value:...} and sets notifyOption itself
+      // Step 2: Build payload — flat object, backend wraps in {value:...} and forces notifyOption
       const pbiPayload: Record<string, any> = {
         enabled: scheduleEnabled,
         times: scheduleTimes,
@@ -113,72 +101,38 @@ export default function PowerBIReport() {
         pbiPayload.days = scheduleDays;
       }
 
-      const lakehouseUrl = `${LAKEHOUSE_BASE_URL}/refresh/${encodeURIComponent(rawReportName)}/schedule`;
       const pbiUrl = `${BACKEND_BASE_URL}/datasets/${encodeURIComponent(datasetId)}/refresh-schedule?workspace_id=${encodeURIComponent(workspaceId)}`;
 
-      console.log("Step 2 — Lakehouse URL:", lakehouseUrl);
-      console.log("Step 2 — Lakehouse Payload:", JSON.stringify(lakehousePayload));
       console.log("Step 2 — Power BI URL:", pbiUrl);
       console.log("Step 2 — Power BI Payload:", JSON.stringify(pbiPayload));
 
-      // Step 3: Fire both requests in parallel
-      console.log("Step 3 — Firing both requests…");
+      // Step 3: Fire request (backend uses Service Principal token)
+      console.log("Step 3 — Sending PATCH request…");
 
-      const [lakehouseRes, pbiRes] = await Promise.allSettled([
-        fetch(lakehouseUrl, {
-          method: "PATCH",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(lakehousePayload),
-        }),
-        fetch(pbiUrl, {
-          method: "PATCH",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(pbiPayload),
-        }),
-      ]);
+      const pbiRes = await fetch(pbiUrl, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(pbiPayload),
+      });
 
-      // Step 4: Trace Lakehouse response
-      let lakehouseOk = false;
-      if (lakehouseRes.status === "fulfilled") {
-        const res = lakehouseRes.value;
-        const body = await res.text();
-        console.log(`Step 4 — Lakehouse response: ${res.status} ${res.statusText}`, body);
-        lakehouseOk = res.ok;
-        if (!res.ok) console.warn("Step 4 — Lakehouse returned non-OK:", res.status, body);
-      } else {
-        console.error("Step 4 — Lakehouse fetch rejected:", lakehouseRes.reason);
+      // Step 4: Trace response
+      const body = await pbiRes.text();
+      console.log(`Step 4 — Power BI response: ${pbiRes.status} ${pbiRes.statusText}`, body);
+
+      if (!pbiRes.ok) {
+        console.error("Step 4 — Power BI returned non-OK:", pbiRes.status, body);
+        throw new Error(`Power BI schedule failed: ${body || `HTTP ${pbiRes.status}`}`);
       }
 
-      // Step 5: Trace Power BI response
-      let pbiOk = false;
-      if (pbiRes.status === "fulfilled") {
-        const res = pbiRes.value;
-        const body = await res.text();
-        console.log(`Step 5 — Power BI response: ${res.status} ${res.statusText}`, body);
-        pbiOk = res.ok;
-        if (!res.ok) {
-          console.error("Step 5 — Power BI returned non-OK:", res.status, body);
-          throw new Error(`Power BI schedule failed: ${body || `HTTP ${res.status}`}`);
-        }
-      } else {
-        console.error("Step 5 — Power BI fetch rejected:", pbiRes.reason);
-        throw new Error(`Power BI schedule request failed: ${pbiRes.reason}`);
-      }
-
-      // Step 6: Summary
-      console.log("Step 6 — Results summary:", { lakehouseOk, pbiOk });
+      // Step 5: Summary
+      console.log("Step 5 — Success");
       console.groupEnd();
-
-      const parts: string[] = [];
-      if (pbiOk) parts.push(`Power BI: ${scheduleTimes.join(", ")} on ${scheduleDays.length} day(s)`);
-      if (lakehouseOk) parts.push(`Lakehouse: every ${refreshInterval} min`);
 
       toast({
         title: scheduleEnabled ? "Schedule enabled" : "Schedule disabled",
         description: scheduleEnabled
-          ? parts.join(" | ") || "Schedule updated."
+          ? `Power BI: ${scheduleTimes.join(", ")} on ${scheduleDays.length > 0 ? scheduleDays.length + " day(s)" : "all days"}`
           : "Scheduled refresh has been turned off.",
       });
       setScheduleOpen(false);
@@ -822,31 +776,10 @@ export default function PowerBIReport() {
             {/* All schedule options - only shown when enabled */}
             {scheduleEnabled && (
               <>
-                {/* Lakehouse Interval */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Lakehouse Refresh Interval</label>
-                  <Select value={refreshInterval} onValueChange={setRefreshInterval}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="5">Every 5 minutes</SelectItem>
-                      <SelectItem value="10">Every 10 minutes</SelectItem>
-                      <SelectItem value="15">Every 15 minutes</SelectItem>
-                      <SelectItem value="30">Every 30 minutes</SelectItem>
-                      <SelectItem value="60">Every 1 hour</SelectItem>
-                      <SelectItem value="120">Every 2 hours</SelectItem>
-                      <SelectItem value="180">Every 3 hours</SelectItem>
-                      <SelectItem value="360">Every 6 hours</SelectItem>
-                      <SelectItem value="720">Every 12 hours</SelectItem>
-                      <SelectItem value="1440">Every 24 hours</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
                 {/* Days of the week */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Power BI Refresh Days</label>
+                  <label className="text-sm font-medium">Refresh Days</label>
+                  <p className="text-xs text-muted-foreground">Leave empty for daily refresh</p>
                   <div className="grid grid-cols-4 gap-2">
                     {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day) => (
                       <label key={day} className="flex items-center gap-2 text-sm cursor-pointer">
@@ -866,7 +799,8 @@ export default function PowerBIReport() {
 
                 {/* Refresh Times */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Power BI Refresh Times (UTC)</label>
+                  <label className="text-sm font-medium">Refresh Times</label>
+                  <p className="text-xs text-muted-foreground">HH:MM format · Max 48/day (Premium) or 8/day</p>
                   <div className="flex flex-wrap gap-2">
                     {scheduleTimes.map((t) => (
                       <span key={t} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-sm">
@@ -922,19 +856,10 @@ export default function PowerBIReport() {
                   </Select>
                 </div>
 
-                {/* Notify Option */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Notification</label>
-                  <Select value={notifyOption} onValueChange={setNotifyOption}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="MailOnFailure">Email on failure</SelectItem>
-                      <SelectItem value="NoNotification">No notification</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {/* Info note about notifications */}
+                <p className="text-xs text-muted-foreground italic">
+                  Notifications are managed by the service principal (NoNotification).
+                </p>
               </>
             )}
           </div>
