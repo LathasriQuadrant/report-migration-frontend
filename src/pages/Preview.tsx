@@ -91,7 +91,8 @@ export default function PowerBIReport() {
 
     setScheduling(true);
     try {
-      // Step 2: Build payload — flat object, backend wraps in {value:...} and forces notifyOption
+      // Step 2: Build payloads for both endpoints
+      // --- Power BI payload (flat — backend wraps in {value:...} and forces notifyOption) ---
       const pbiPayload: Record<string, any> = {
         enabled: scheduleEnabled,
         times: scheduleTimes,
@@ -101,39 +102,77 @@ export default function PowerBIReport() {
         pbiPayload.days = scheduleDays;
       }
 
+      // --- Lakehouse payload ---
+      const lakehousePayload = {
+        interval_minutes: parseInt(refreshInterval, 10) || 60,
+        enable_scheduled_refresh: scheduleEnabled,
+      };
+
       const pbiUrl = `${BACKEND_BASE_URL}/datasets/${encodeURIComponent(datasetId)}/refresh-schedule?workspace_id=${encodeURIComponent(workspaceId)}`;
+      const lakehouseUrl = `${LAKEHOUSE_BASE_URL}/api/v1/lakehouse/refresh/${encodeURIComponent(rawReportName)}/schedule`;
 
       console.log("Step 2 — Power BI URL:", pbiUrl);
       console.log("Step 2 — Power BI Payload:", JSON.stringify(pbiPayload));
+      console.log("Step 2 — Lakehouse URL:", lakehouseUrl);
+      console.log("Step 2 — Lakehouse Payload:", JSON.stringify(lakehousePayload));
 
-      // Step 3: Fire request (backend uses Service Principal token)
-      console.log("Step 3 — Sending PATCH request…");
+      // Step 3: Fire both requests in parallel
+      console.log("Step 3 — Sending PATCH to both endpoints…");
 
-      const pbiRes = await fetch(pbiUrl, {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(pbiPayload),
-      });
+      const [pbiResult, lakehouseResult] = await Promise.allSettled([
+        fetch(pbiUrl, {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(pbiPayload),
+        }),
+        fetch(lakehouseUrl, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(lakehousePayload),
+        }),
+      ]);
 
-      // Step 4: Trace response
-      const body = await pbiRes.text();
-      console.log(`Step 4 — Power BI response: ${pbiRes.status} ${pbiRes.statusText}`, body);
+      // Step 4: Trace Power BI response
+      let pbiOk = false;
+      if (pbiResult.status === "fulfilled") {
+        const pbiBody = await pbiResult.value.text();
+        console.log(`Step 4a — Power BI: ${pbiResult.value.status} ${pbiResult.value.statusText}`, pbiBody);
+        pbiOk = pbiResult.value.ok;
+        if (!pbiOk) console.error("Power BI returned non-OK:", pbiResult.value.status, pbiBody);
+      } else {
+        console.error("Step 4a — Power BI fetch failed:", pbiResult.reason);
+      }
 
-      if (!pbiRes.ok) {
-        console.error("Step 4 — Power BI returned non-OK:", pbiRes.status, body);
-        throw new Error(`Power BI schedule failed: ${body || `HTTP ${pbiRes.status}`}`);
+      // Step 4b: Trace Lakehouse response
+      let lakehouseOk = false;
+      if (lakehouseResult.status === "fulfilled") {
+        const lhBody = await lakehouseResult.value.text();
+        console.log(`Step 4b — Lakehouse: ${lakehouseResult.value.status} ${lakehouseResult.value.statusText}`, lhBody);
+        lakehouseOk = lakehouseResult.value.ok;
+        if (!lakehouseOk) console.error("Lakehouse returned non-OK:", lakehouseResult.value.status, lhBody);
+      } else {
+        console.error("Step 4b — Lakehouse fetch failed:", lakehouseResult.reason);
       }
 
       // Step 5: Summary
-      console.log("Step 5 — Success");
+      if (!pbiOk && !lakehouseOk) {
+        throw new Error("Both Power BI and Lakehouse schedule requests failed. Check console for details.");
+      }
+
+      const parts: string[] = [];
+      if (pbiOk) parts.push(`Power BI: ${scheduleTimes.join(", ")} on ${scheduleDays.length > 0 ? scheduleDays.length + " day(s)" : "all days"}`);
+      if (lakehouseOk) parts.push(`Lakehouse: every ${refreshInterval} min`);
+      if (!pbiOk) parts.push("Power BI failed (see console)");
+      if (!lakehouseOk) parts.push("Lakehouse failed (see console)");
+
+      console.log("Step 5 — Done:", { pbiOk, lakehouseOk });
       console.groupEnd();
 
       toast({
         title: scheduleEnabled ? "Schedule enabled" : "Schedule disabled",
-        description: scheduleEnabled
-          ? `Power BI: ${scheduleTimes.join(", ")} on ${scheduleDays.length > 0 ? scheduleDays.length + " day(s)" : "all days"}`
-          : "Scheduled refresh has been turned off.",
+        description: scheduleEnabled ? parts.join(" | ") : "Scheduled refresh has been turned off.",
+        variant: (!pbiOk || !lakehouseOk) ? "destructive" : "default",
       });
       setScheduleOpen(false);
     } catch (err: any) {
@@ -854,6 +893,20 @@ export default function PowerBIReport() {
                       <SelectItem value="GMT Standard Time">GMT</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                {/* Lakehouse Refresh Interval */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Lakehouse Refresh Interval (minutes)</label>
+                  <p className="text-xs text-muted-foreground">How often the Lakehouse should refresh data</p>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={refreshInterval}
+                    onChange={(e) => setRefreshInterval(e.target.value)}
+                    className="w-32"
+                    placeholder="60"
+                  />
                 </div>
 
                 {/* Info note about notifications */}
