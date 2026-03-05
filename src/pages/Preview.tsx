@@ -118,6 +118,7 @@ export default function PowerBIReport() {
 
     setRefreshing(true);
     try {
+      // Hit the original dataset refresh endpoint
       const res = await fetch(
         `${BACKEND_BASE_URL}/datasets/${encodeURIComponent(datasetId)}/refresh?workspace_id=${encodeURIComponent(workspaceId)}`,
         {
@@ -130,6 +131,23 @@ export default function PowerBIReport() {
       if (!res.ok) {
         const errText = await res.text();
         throw new Error(errText || `HTTP ${res.status}`);
+      }
+
+      // Also hit the lakehouse refresh endpoint
+      if (rawReportName) {
+        const lakehouseRes = await fetch(
+          `${LAKEHOUSE_BASE_URL}/api/v1/lakehouse/refresh/${encodeURIComponent(rawReportName)}`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+
+        if (!lakehouseRes.ok) {
+          const errText = await lakehouseRes.text();
+          console.warn("Lakehouse refresh warning:", errText);
+        }
       }
 
       toast({ title: "Refresh triggered", description: `Refresh started for dataset.` });
@@ -683,7 +701,7 @@ export default function PowerBIReport() {
           <div className="flex justify-end gap-2">
             <Button onClick={handleRefreshNow} disabled={refreshing} variant="outline" className="gap-2">
               <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-              {refreshing ? "Refreshing..." : "Refresh Now"}
+              {refreshing ? "Refreshing..." : "Refresh"}
             </Button>
             <Button onClick={() => setScheduleOpen(true)} className="gap-2">
               <Clock className="h-4 w-4" />
