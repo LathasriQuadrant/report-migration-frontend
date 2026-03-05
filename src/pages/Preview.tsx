@@ -839,7 +839,7 @@ export default function PowerBIReport() {
                 {/* Refresh Times */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Refresh Times</label>
-                  <p className="text-xs text-muted-foreground">HH:MM format · Max 48/day (Premium) or 8/day</p>
+                  <p className="text-xs text-muted-foreground">Select time slots (30-min intervals) · Max 48/day (Premium) or 8/day</p>
                   <div className="flex flex-wrap gap-2">
                     {scheduleTimes.map((t) => (
                       <span key={t} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-sm">
@@ -855,24 +855,31 @@ export default function PowerBIReport() {
                     ))}
                   </div>
                   <div className="flex gap-2">
-                    <Input
-                      type="time"
+                    <Select
                       value={newTime}
-                      onChange={(e) => setNewTime(e.target.value)}
-                      className="w-32"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        if (newTime && !scheduleTimes.includes(newTime)) {
-                          setScheduleTimes((prev) => [...prev, newTime].sort());
+                      onValueChange={(val) => {
+                        setNewTime(val);
+                        if (val && !scheduleTimes.includes(val)) {
+                          setScheduleTimes((prev) => [...prev, val].sort());
                         }
                       }}
                     >
-                      Add Time
-                    </Button>
+                      <SelectTrigger className="w-40">
+                        <SelectValue placeholder="Select time" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-60">
+                        {Array.from({ length: 48 }, (_, i) => {
+                          const h = String(Math.floor(i / 2)).padStart(2, "0");
+                          const m = i % 2 === 0 ? "00" : "30";
+                          const val = `${h}:${m}`;
+                          return (
+                            <SelectItem key={val} value={val} disabled={scheduleTimes.includes(val)}>
+                              {val}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
