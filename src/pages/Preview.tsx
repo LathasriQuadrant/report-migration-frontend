@@ -53,7 +53,14 @@ export default function PowerBIReport() {
   const [refreshing, setRefreshing] = useState(false);
 
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
-  const [refreshInterval, setRefreshInterval] = useState("60"); // minutes
+  const [refreshInterval, setRefreshInterval] = useState("60"); // minutes for lakehouse
+
+  // Power BI schedule fields
+  const [scheduleDays, setScheduleDays] = useState<string[]>(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]);
+  const [scheduleTimes, setScheduleTimes] = useState<string[]>(["08:00"]);
+  const [newTime, setNewTime] = useState("08:00");
+  const [scheduleTimeZone, setScheduleTimeZone] = useState("UTC");
+  const [notifyOption, setNotifyOption] = useState("MailOnFailure");
 
   const isEmbedding = useRef(false);
   const executed = useRef(false);
