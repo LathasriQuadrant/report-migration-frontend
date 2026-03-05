@@ -78,49 +78,113 @@ export default function PowerBIReport() {
   const LAKEHOUSE_BASE_URL = "https://live-data-lakehouse-erbghyatb6f4awgf.eastus-01.azurewebsites.net";
 
   const handleScheduleRefresh = async () => {
+    console.group("DEBUG: Schedule Refresh");
+
+    // Step 1: Validate required session values
+    console.log("Step 1 — Session values:", { rawReportName, datasetId, workspaceId });
+
     if (!rawReportName) {
+      console.error("Step 1 FAIL: rawReportName is missing");
+      console.groupEnd();
       toast({ title: "Missing data", description: "Workbook name not found.", variant: "destructive" });
+      return;
+    }
+    if (!datasetId || !workspaceId) {
+      console.error("Step 1 FAIL: datasetId or workspaceId missing");
+      console.groupEnd();
+      toast({ title: "Missing data", description: "Dataset ID or Workspace ID not found.", variant: "destructive" });
       return;
     }
 
     setScheduling(true);
     try {
-      if (!datasetId || !workspaceId) {
-        throw new Error("Dataset ID or Workspace ID not found.");
-      }
-
-      // Hit Power BI refresh schedule endpoint (accesstoken domain)
+      // Step 2: Build payloads
+      const lakehousePayload = {
+        interval_minutes: Number(refreshInterval),
+        enable_scheduled_refresh: scheduleEnabled,
+      };
       const pbiPayload = {
-        enabled: scheduleEnabled,
-        days: scheduleDays,
-        times: scheduleTimes,
-        timeZone: scheduleTimeZone,
-        notifyOption: notifyOption,
+        value: {
+          enabled: scheduleEnabled,
+          days: scheduleDays,
+          times: scheduleTimes,
+          timeZone: scheduleTimeZone,
+          notifyOption: notifyOption,
+        },
       };
 
-      const pbiRes = await fetch(
-        `${BACKEND_BASE_URL}/datasets/${encodeURIComponent(datasetId)}/refresh-schedule?workspace_id=${encodeURIComponent(workspaceId)}`,
-        {
+      const lakehouseUrl = `${LAKEHOUSE_BASE_URL}/refresh/${encodeURIComponent(rawReportName)}/schedule`;
+      const pbiUrl = `${BACKEND_BASE_URL}/datasets/${encodeURIComponent(datasetId)}/refresh-schedule?workspace_id=${encodeURIComponent(workspaceId)}`;
+
+      console.log("Step 2 — Lakehouse URL:", lakehouseUrl);
+      console.log("Step 2 — Lakehouse Payload:", JSON.stringify(lakehousePayload));
+      console.log("Step 2 — Power BI URL:", pbiUrl);
+      console.log("Step 2 — Power BI Payload:", JSON.stringify(pbiPayload));
+
+      // Step 3: Fire both requests in parallel
+      console.log("Step 3 — Firing both requests…");
+
+      const [lakehouseRes, pbiRes] = await Promise.allSettled([
+        fetch(lakehouseUrl, {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(lakehousePayload),
+        }),
+        fetch(pbiUrl, {
           method: "PATCH",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(pbiPayload),
-        }
-      );
+        }),
+      ]);
 
-      if (!pbiRes.ok) {
-        const errText = await pbiRes.text();
-        throw new Error(errText || `HTTP ${pbiRes.status}`);
+      // Step 4: Trace Lakehouse response
+      let lakehouseOk = false;
+      if (lakehouseRes.status === "fulfilled") {
+        const res = lakehouseRes.value;
+        const body = await res.text();
+        console.log(`Step 4 — Lakehouse response: ${res.status} ${res.statusText}`, body);
+        lakehouseOk = res.ok;
+        if (!res.ok) console.warn("Step 4 — Lakehouse returned non-OK:", res.status, body);
+      } else {
+        console.error("Step 4 — Lakehouse fetch rejected:", lakehouseRes.reason);
       }
+
+      // Step 5: Trace Power BI response
+      let pbiOk = false;
+      if (pbiRes.status === "fulfilled") {
+        const res = pbiRes.value;
+        const body = await res.text();
+        console.log(`Step 5 — Power BI response: ${res.status} ${res.statusText}`, body);
+        pbiOk = res.ok;
+        if (!res.ok) {
+          console.error("Step 5 — Power BI returned non-OK:", res.status, body);
+          throw new Error(`Power BI schedule failed: ${body || `HTTP ${res.status}`}`);
+        }
+      } else {
+        console.error("Step 5 — Power BI fetch rejected:", pbiRes.reason);
+        throw new Error(`Power BI schedule request failed: ${pbiRes.reason}`);
+      }
+
+      // Step 6: Summary
+      console.log("Step 6 — Results summary:", { lakehouseOk, pbiOk });
+      console.groupEnd();
+
+      const parts: string[] = [];
+      if (pbiOk) parts.push(`Power BI: ${scheduleTimes.join(", ")} on ${scheduleDays.length} day(s)`);
+      if (lakehouseOk) parts.push(`Lakehouse: every ${refreshInterval} min`);
 
       toast({
         title: scheduleEnabled ? "Schedule enabled" : "Schedule disabled",
         description: scheduleEnabled
-          ? `Power BI: ${scheduleTimes.join(", ")} on ${scheduleDays.length} day(s) (${scheduleTimeZone}).`
+          ? parts.join(" | ") || "Schedule updated."
           : "Scheduled refresh has been turned off.",
       });
       setScheduleOpen(false);
     } catch (err: any) {
+      console.error("Schedule Refresh ERROR:", err);
+      console.groupEnd();
       toast({ title: "Schedule failed", description: err.message, variant: "destructive" });
     } finally {
       setScheduling(false);
