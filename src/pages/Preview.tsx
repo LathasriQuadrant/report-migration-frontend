@@ -76,12 +76,10 @@ export default function PowerBIReport() {
 
     setScheduling(true);
     try {
-      const payload: Record<string, any> = {
+      const payload = {
+        interval_minutes: Number(refreshInterval),
         enable_scheduled_refresh: scheduleEnabled,
       };
-      if (scheduleEnabled) {
-        payload.interval_minutes = Number(refreshInterval);
-      }
 
       const res = await fetch(
         `${LAKEHOUSE_BASE_URL}/refresh/${encodeURIComponent(rawReportName)}/schedule`,
