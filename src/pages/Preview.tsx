@@ -118,6 +118,7 @@ export default function PowerBIReport() {
 
     setRefreshing(true);
     try {
+      // Hit the original dataset refresh endpoint
       const res = await fetch(
         `${BACKEND_BASE_URL}/datasets/${encodeURIComponent(datasetId)}/refresh?workspace_id=${encodeURIComponent(workspaceId)}`,
         {
@@ -130,6 +131,23 @@ export default function PowerBIReport() {
       if (!res.ok) {
         const errText = await res.text();
         throw new Error(errText || `HTTP ${res.status}`);
+      }
+
+      // Also hit the lakehouse refresh endpoint
+      if (rawReportName) {
+        const lakehouseRes = await fetch(
+          `${LAKEHOUSE_BASE_URL}/api/v1/lakehouse/refresh/${encodeURIComponent(rawReportName)}`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+
+        if (!lakehouseRes.ok) {
+          const errText = await lakehouseRes.text();
+          console.warn("Lakehouse refresh warning:", errText);
+        }
       }
 
       toast({ title: "Refresh triggered", description: `Refresh started for dataset.` });
