@@ -775,31 +775,10 @@ export default function PowerBIReport() {
             {/* All schedule options - only shown when enabled */}
             {scheduleEnabled && (
               <>
-                {/* Lakehouse Interval */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Lakehouse Refresh Interval</label>
-                  <Select value={refreshInterval} onValueChange={setRefreshInterval}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="5">Every 5 minutes</SelectItem>
-                      <SelectItem value="10">Every 10 minutes</SelectItem>
-                      <SelectItem value="15">Every 15 minutes</SelectItem>
-                      <SelectItem value="30">Every 30 minutes</SelectItem>
-                      <SelectItem value="60">Every 1 hour</SelectItem>
-                      <SelectItem value="120">Every 2 hours</SelectItem>
-                      <SelectItem value="180">Every 3 hours</SelectItem>
-                      <SelectItem value="360">Every 6 hours</SelectItem>
-                      <SelectItem value="720">Every 12 hours</SelectItem>
-                      <SelectItem value="1440">Every 24 hours</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
                 {/* Days of the week */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Power BI Refresh Days</label>
+                  <label className="text-sm font-medium">Refresh Days</label>
+                  <p className="text-xs text-muted-foreground">Leave empty for daily refresh</p>
                   <div className="grid grid-cols-4 gap-2">
                     {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day) => (
                       <label key={day} className="flex items-center gap-2 text-sm cursor-pointer">
@@ -819,7 +798,8 @@ export default function PowerBIReport() {
 
                 {/* Refresh Times */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Power BI Refresh Times (UTC)</label>
+                  <label className="text-sm font-medium">Refresh Times</label>
+                  <p className="text-xs text-muted-foreground">HH:MM format · Max 48/day (Premium) or 8/day</p>
                   <div className="flex flex-wrap gap-2">
                     {scheduleTimes.map((t) => (
                       <span key={t} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-sm">
@@ -875,19 +855,10 @@ export default function PowerBIReport() {
                   </Select>
                 </div>
 
-                {/* Notify Option */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Notification</label>
-                  <Select value={notifyOption} onValueChange={setNotifyOption}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="MailOnFailure">Email on failure</SelectItem>
-                      <SelectItem value="NoNotification">No notification</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {/* Info note about notifications */}
+                <p className="text-xs text-muted-foreground italic">
+                  Notifications are managed by the service principal (NoNotification).
+                </p>
               </>
             )}
           </div>
