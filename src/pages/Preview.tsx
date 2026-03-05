@@ -60,7 +60,7 @@ export default function PowerBIReport() {
   const [scheduleTimes, setScheduleTimes] = useState<string[]>(["08:00"]);
   const [newTime, setNewTime] = useState("08:00");
   const [scheduleTimeZone, setScheduleTimeZone] = useState("UTC");
-  const [notifyOption, setNotifyOption] = useState("MailOnFailure");
+  // notifyOption removed — backend forces "NoNotification" via Service Principal
 
   const isEmbedding = useRef(false);
   const executed = useRef(false);
