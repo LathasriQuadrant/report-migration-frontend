@@ -788,32 +788,25 @@ export default function PowerBIReport() {
           </DialogHeader>
 
           <div className="space-y-6 py-2">
-            {/* ─── Section 1: Lakehouse Refresh ─── */}
-            <div className="space-y-4 rounded-lg border p-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <span className="text-sm font-semibold">Lakehouse Refresh</span>
-                  <p className="text-xs text-muted-foreground">
-                    {lakehouseEnabled ? "Lakehouse refresh is active" : "Lakehouse refresh is off"}
-                  </p>
-                </div>
-                <Switch checked={lakehouseEnabled} onCheckedChange={setLakehouseEnabled} />
+            {/* ─── Single Toggle for Both ─── */}
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div className="space-y-1">
+                <span className="text-sm font-semibold">Enable Scheduled Refresh</span>
+                <p className="text-xs text-muted-foreground">
+                  {scheduleEnabled
+                    ? "Both Lakehouse and Semantic Model refresh are active"
+                    : "Scheduled refresh is off"}
+                </p>
               </div>
+              <Switch checked={scheduleEnabled} onCheckedChange={setScheduleEnabled} />
+            </div>
 
-              {lakehouseEnabled && (
-                <div className="space-y-3">
-                  <label className="text-sm font-medium">Refresh Interval</label>
-                  <Select
-                    value={useCustomInterval ? "custom" : lakehouseInterval}
-                    onValueChange={(val) => {
-                      if (val === "custom") {
-                        setUseCustomInterval(true);
-                      } else {
-                        setUseCustomInterval(false);
-                        setLakehouseInterval(val);
-                      }
-                    }}
-                  >
+            {scheduleEnabled && (
+              <>
+                {/* ─── Lakehouse Interval ─── */}
+                <div className="space-y-3 rounded-lg border p-4">
+                  <span className="text-sm font-semibold">Lakehouse Refresh Interval</span>
+                  <Select value={lakehouseInterval} onValueChange={setLakehouseInterval}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -821,50 +814,20 @@ export default function PowerBIReport() {
                       <SelectItem value="5">Every 5 minutes</SelectItem>
                       <SelectItem value="10">Every 10 minutes</SelectItem>
                       <SelectItem value="30">Every 30 minutes</SelectItem>
-                      <SelectItem value="custom">Custom</SelectItem>
                     </SelectContent>
                   </Select>
-
-                  {useCustomInterval && (
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        min={5}
-                        placeholder="Enter minutes (min 5)"
-                        value={customInterval}
-                        onChange={(e) => setCustomInterval(e.target.value)}
-                        className="w-48"
-                      />
-                      <span className="text-sm text-muted-foreground">minutes</span>
-                    </div>
-                  )}
                 </div>
-              )}
-            </div>
 
-            {/* ─── Section 2: Power BI Semantic Model Schedule ─── */}
-            <div className="space-y-4 rounded-lg border p-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
+                {/* ─── Semantic Model Schedule ─── */}
+                <div className="space-y-4 rounded-lg border p-4">
                   <span className="text-sm font-semibold">Semantic Model Schedule</span>
-                  <p className="text-xs text-muted-foreground">
-                    {pbiEnabled ? "Power BI schedule is active" : "Power BI schedule is off"}
-                  </p>
-                </div>
-                <Switch checked={pbiEnabled} onCheckedChange={setPbiEnabled} />
-              </div>
 
-              {pbiEnabled && (
-                <div className="space-y-4">
                   {/* Days selection */}
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Days</label>
                     <div className="flex flex-wrap gap-2">
                       {ALL_DAYS.map((day) => (
-                        <label
-                          key={day}
-                          className="flex items-center gap-1.5 cursor-pointer"
-                        >
+                        <label key={day} className="flex items-center gap-1.5 cursor-pointer">
                           <Checkbox
                             checked={selectedDays.includes(day)}
                             onCheckedChange={() => toggleDay(day)}
@@ -875,34 +838,75 @@ export default function PowerBIReport() {
                     </div>
                   </div>
 
-                  {/* Time slots - only :00 and :30 */}
+                  {/* Time selection via dropdowns */}
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">
-                      Time Slots (UTC) — only :00 and :30
-                    </label>
-                    <div className="grid grid-cols-6 gap-1.5 max-h-48 overflow-y-auto rounded border p-2 bg-muted/20">
-                      {TIME_SLOTS.map((time) => (
-                        <button
-                          key={time}
-                          type="button"
-                          onClick={() => toggleTime(time)}
-                          className={`px-2 py-1 text-xs rounded-md border transition-colors ${
-                            selectedTimes.includes(time)
-                              ? "bg-primary text-primary-foreground border-primary"
-                              : "bg-background text-foreground border-input hover:bg-accent"
-                          }`}
-                        >
-                          {time}
-                        </button>
-                      ))}
+                    <label className="text-sm font-medium">Add Time Slot (UTC)</label>
+                    <div className="flex items-center gap-2">
+                      <Select value={selectedHour} onValueChange={setSelectedHour}>
+                        <SelectTrigger className="w-24">
+                          <SelectValue placeholder="Hour" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0")).map((h) => (
+                            <SelectItem key={h} value={h}>{h}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <span className="text-sm font-medium">:</span>
+                      <Select value={selectedMinute} onValueChange={setSelectedMinute}>
+                        <SelectTrigger className="w-24">
+                          <SelectValue placeholder="Min" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="00">00</SelectItem>
+                          <SelectItem value="30">30</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          const time = `${selectedHour}:${selectedMinute}`;
+                          if (!selectedTimes.includes(time)) {
+                            setSelectedTimes((prev) => [...prev, time].sort());
+                          }
+                        }}
+                      >
+                        Add
+                      </Button>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      {selectedTimes.length} time slot(s) selected
-                    </p>
                   </div>
+
+                  {/* Selected time slots */}
+                  {selectedTimes.length > 0 && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Selected Time Slots</label>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedTimes.map((time) => (
+                          <span
+                            key={time}
+                            className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary"
+                          >
+                            {time}
+                            <button
+                              type="button"
+                              onClick={() => setSelectedTimes((prev) => prev.filter((t) => t !== time))}
+                              className="ml-1 rounded-full hover:bg-primary/20 p-0.5"
+                            >
+                              <XCircle className="h-3 w-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {selectedTimes.length} time slot(s) selected
+                      </p>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </>
+            )}
           </div>
 
           <DialogFooter>
