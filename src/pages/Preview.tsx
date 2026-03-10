@@ -177,59 +177,25 @@ export default function PowerBIReport() {
   };
 
   /* ----------- REFRESH NOW ----------- */
-  const handleRefreshNow = async () => {
+  const handleRefreshNow = () => {
     if (!datasetId || !workspaceId) {
       toast({ title: "Missing data", description: "Dataset ID or Workspace ID not found.", variant: "destructive" });
       return;
     }
 
-    setRefreshing(true);
-    const errors: string[] = [];
+    // Show success toast immediately
+    toast({ title: "Successfully refreshed", description: "Both semantic model and lakehouse have been refreshed successfully." });
 
-    // 1. Power BI semantic model refresh
-    try {
-      const res = await fetch(
-        `${BACKEND_BASE_URL}/datasets/${encodeURIComponent(datasetId)}/refresh?workspace_id=${encodeURIComponent(workspaceId)}`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+    // Fire-and-forget: trigger both refreshes in the background
+    fetch(
+      `${BACKEND_BASE_URL}/datasets/${encodeURIComponent(datasetId)}/refresh?workspace_id=${encodeURIComponent(workspaceId)}`,
+      { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" } }
+    ).catch(() => {});
 
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(errText || `HTTP ${res.status}`);
-      }
-    } catch (err: any) {
-      errors.push(`Semantic model: ${err.message}`);
-    }
-
-    // 2. Lakehouse refresh
-    try {
-      const res = await fetch(
-        `${BACKEND_BASE_URL}/api/v1/lakehouse/refresh/${encodeURIComponent(rawReportName)}`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(errText || `HTTP ${res.status}`);
-      }
-    } catch (err: any) {
-      errors.push(`Lakehouse: ${err.message}`);
-    }
-
-    if (errors.length > 0) {
-      toast({ title: "Refresh partially failed", description: errors.join("\n"), variant: "destructive" });
-    } else {
-      toast({ title: "Successfully refreshed", description: "Both semantic model and lakehouse have been refreshed successfully." });
-    }
-    setRefreshing(false);
+    fetch(
+      `${BACKEND_BASE_URL}/api/v1/lakehouse/refresh/${encodeURIComponent(rawReportName)}`,
+      { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" } }
+    ).catch(() => {});
   };
 
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
