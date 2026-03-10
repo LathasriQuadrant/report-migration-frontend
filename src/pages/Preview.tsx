@@ -113,11 +113,11 @@ export default function PowerBIReport() {
 
     // 1. Lakehouse schedule
     try {
-      const interval = useCustomInterval ? Number(customInterval) : Number(lakehouseInterval);
+      const interval = Number(lakehouseInterval);
       const payload: Record<string, any> = {
-        enable_scheduled_refresh: lakehouseEnabled,
+        enable_scheduled_refresh: scheduleEnabled,
       };
-      if (lakehouseEnabled) {
+      if (scheduleEnabled) {
         if (!interval || interval < 5) {
           throw new Error("Interval must be at least 5 minutes");
         }
@@ -147,9 +147,9 @@ export default function PowerBIReport() {
     if (datasetId && workspaceId) {
       try {
         const pbiPayload: Record<string, any> = {
-          enabled: pbiEnabled,
+          enabled: scheduleEnabled,
         };
-        if (pbiEnabled) {
+        if (scheduleEnabled) {
           if (selectedDays.length === 0) throw new Error("Select at least one day");
           if (selectedTimes.length === 0) throw new Error("Select at least one time slot");
           pbiPayload.days = selectedDays;
