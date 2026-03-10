@@ -88,12 +88,6 @@ export default function PowerBIReport() {
     );
   };
 
-  /* ----------- TIME TOGGLE HELPER ----------- */
-  const toggleTime = (time: string) => {
-    setSelectedTimes((prev) =>
-      prev.includes(time) ? prev.filter((t) => t !== time) : [...prev, time]
-    );
-  };
 
   /* ----------- SCHEDULE REFRESH ----------- */
   const handleScheduleRefresh = async () => {
