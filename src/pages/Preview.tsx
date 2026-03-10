@@ -6,8 +6,17 @@ import { Loader2, CheckCircle2, XCircle, Globe, AlertTriangle, ArrowLeft, Clock,
 
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+
 import { useToast } from "@/hooks/use-toast";
 import AppLayout from "@/components/layout/AppLayout";
 
@@ -37,6 +46,8 @@ interface ApiVisual {
   bindings: Record<string, ApiBinding | ApiBinding[]>;
 }
 
+const ALL_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
 export default function PowerBIReport() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -50,8 +61,17 @@ export default function PowerBIReport() {
   const [scheduling, setScheduling] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Single toggle for both Lakehouse + Semantic Model
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
-  const [refreshInterval, setRefreshInterval] = useState("60"); // minutes
+
+  // Lakehouse interval
+  const [lakehouseInterval, setLakehouseInterval] = useState("30");
+
+  // Power BI schedule state
+  const [selectedDays, setSelectedDays] = useState<string[]>(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]);
+  const [selectedHour, setSelectedHour] = useState("08");
+  const [selectedMinute, setSelectedMinute] = useState("00");
+  const [selectedTimes, setSelectedTimes] = useState<string[]>(["08:00"]);
 
   const isEmbedding = useRef(false);
   const executed = useRef(false);
@@ -67,6 +87,12 @@ export default function PowerBIReport() {
 
   const BACKEND_BASE_URL = "https://accesstokens-aecjbzaqaqcuh6bd.eastus-01.azurewebsites.net";
 
+  /* ----------- DAY TOGGLE HELPER ----------- */
+  const toggleDay = (day: string) => {
+    setSelectedDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
+  };
+
+  /* ----------- SCHEDULE REFRESH ----------- */
   const handleScheduleRefresh = async () => {
     if (!rawReportName) {
       toast({ title: "Missing data", description: "Workbook name not found.", variant: "destructive" });
@@ -74,43 +100,86 @@ export default function PowerBIReport() {
     }
 
     setScheduling(true);
+    const errors: string[] = [];
+
+    // 1. Lakehouse schedule
     try {
+      const interval = Number(lakehouseInterval);
       const payload: Record<string, any> = {
         enable_scheduled_refresh: scheduleEnabled,
       };
       if (scheduleEnabled) {
-        payload.interval_minutes = Number(refreshInterval);
+        if (!interval || interval < 5) {
+          throw new Error("Interval must be at least 5 minutes");
+        }
+        payload.interval_minutes = interval;
       }
 
+      const LAKEHOUSE_BASE_URL = "https://live-data-lakehouse-erbghyatb6f4awgf.eastus-01.azurewebsites.net";
       const res = await fetch(
-        `${BACKEND_BASE_URL}/refresh/${encodeURIComponent(rawReportName)}/schedule`,
+        `${LAKEHOUSE_BASE_URL}/api/v1/lakehouse/refresh/${encodeURIComponent(rawReportName)}/schedule`,
         {
           method: "PATCH",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
-        }
+        },
       );
 
       if (!res.ok) {
         const errText = await res.text();
         throw new Error(errText || `HTTP ${res.status}`);
       }
+    } catch (err: any) {
+      errors.push(`Lakehouse: ${err.message}`);
+    }
 
+    // 2. Power BI refresh schedule
+    if (datasetId && workspaceId) {
+      try {
+        const pbiPayload: Record<string, any> = {
+          enabled: scheduleEnabled,
+        };
+        if (scheduleEnabled) {
+          if (selectedDays.length === 0) throw new Error("Select at least one day");
+          if (selectedTimes.length === 0) throw new Error("Select at least one time slot");
+          pbiPayload.days = selectedDays;
+          pbiPayload.times = selectedTimes;
+          pbiPayload.timeZone = "UTC";
+        }
+
+        const res = await fetch(
+          `${BACKEND_BASE_URL}/datasets/${encodeURIComponent(datasetId)}/refresh-schedule?workspace_id=${encodeURIComponent(workspaceId)}`,
+          {
+            method: "PATCH",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(pbiPayload),
+          },
+        );
+
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(errText || `HTTP ${res.status}`);
+        }
+      } catch (err: any) {
+        errors.push(`Power BI: ${err.message}`);
+      }
+    }
+
+    if (errors.length > 0) {
+      toast({ title: "Schedule partially failed", description: errors.join("\n"), variant: "destructive" });
+    } else {
       toast({
-        title: scheduleEnabled ? "Schedule enabled" : "Schedule disabled",
-        description: scheduleEnabled
-          ? `Refreshing every ${refreshInterval} minutes.`
-          : "Scheduled refresh has been turned off.",
+        title: "Schedule updated",
+        description: "Both lakehouse and semantic model schedules have been configured.",
       });
       setScheduleOpen(false);
-    } catch (err: any) {
-      toast({ title: "Schedule failed", description: err.message, variant: "destructive" });
-    } finally {
-      setScheduling(false);
     }
+    setScheduling(false);
   };
 
+  /* ----------- REFRESH NOW ----------- */
   const handleRefreshNow = async () => {
     if (!datasetId || !workspaceId) {
       toast({ title: "Missing data", description: "Dataset ID or Workspace ID not found.", variant: "destructive" });
@@ -118,6 +187,9 @@ export default function PowerBIReport() {
     }
 
     setRefreshing(true);
+    const errors: string[] = [];
+
+    // 1. Power BI semantic model refresh
     try {
       const res = await fetch(
         `${BACKEND_BASE_URL}/datasets/${encodeURIComponent(datasetId)}/refresh?workspace_id=${encodeURIComponent(workspaceId)}`,
@@ -125,20 +197,39 @@ export default function PowerBIReport() {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-        }
+        },
       );
 
       if (!res.ok) {
         const errText = await res.text();
         throw new Error(errText || `HTTP ${res.status}`);
       }
-
-      toast({ title: "Refresh triggered", description: `Refresh started for dataset.` });
     } catch (err: any) {
-      toast({ title: "Refresh failed", description: err.message, variant: "destructive" });
-    } finally {
-      setRefreshing(false);
+      errors.push(`Semantic model: ${err.message}`);
     }
+
+    // 2. Lakehouse refresh
+    try {
+      const res = await fetch(`${BACKEND_BASE_URL}/api/v1/lakehouse/refresh/${encodeURIComponent(rawReportName)}`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || `HTTP ${res.status}`);
+      }
+    } catch (err: any) {
+      errors.push(`Lakehouse: ${err.message}`);
+    }
+
+    if (errors.length > 0) {
+      toast({ title: "Refresh partially failed", description: errors.join("\n"), variant: "destructive" });
+    } else {
+      toast({ title: "Refresh triggered", description: "Both semantic model and lakehouse refreshes started." });
+    }
+    setRefreshing(false);
   };
 
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -193,7 +284,6 @@ export default function PowerBIReport() {
     executed.current = true;
     console.group("🚀 Creating Visuals from API");
 
-    // 1. Grab the Job ID we saved on the previous screen
     const currentJobId = sessionStorage.getItem("current_migration_job_id");
 
     try {
@@ -209,6 +299,7 @@ export default function PowerBIReport() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ metadataBlobPath: metadataBlobUrl }),
           });
+          console.log(apiRes);
 
           if (apiRes.ok) {
             const data = await apiRes.json();
@@ -227,7 +318,6 @@ export default function PowerBIReport() {
         setStatus("No visuals to create (Check API logs)");
         setStatusType("warning");
 
-        // ❌ DB UPDATE: Mark as failed because no visuals were found
         if (currentJobId) {
           try {
             await fetch(
@@ -259,22 +349,16 @@ export default function PowerBIReport() {
       }
       await sleep(1000);
 
-      // Build lookup map
       const visualMap = new Map<string, ApiVisual>();
       visualsToCreate.forEach((v) => visualMap.set(v.title, v));
 
-      /* ----------------------------------------------------------
-         🧠 ORPHAN VISUALS & UNIFIED PAGE PROCESSING
-      ---------------------------------------------------------- */
       const assignedVisuals = new Set<string>();
       dashboards.forEach((d) => {
         d.worksheets.forEach((w: string) => assignedVisuals.add(w));
       });
 
-      // Find visuals without a dashboard (like Sheet 5)
       const orphanWorksheets = visualsToCreate.filter((v) => !assignedVisuals.has(v.title)).map((v) => v.title);
 
-      // Create a processing list indicating if a page is for orphans
       const pagesToProcess = dashboards.map((d) => ({
         worksheets: d.worksheets,
         isOrphan: false,
@@ -293,15 +377,11 @@ export default function PowerBIReport() {
 
       let pages = await report.getPages();
 
-      /* ----------------------------------------------------------
-         📊 LOOP THROUGH UNIFIED PAGES
-      ---------------------------------------------------------- */
       for (let i = 0; i < pagesToProcess.length; i++) {
         const config = pagesToProcess[i];
         const expectedPageName = `Page ${i + 1}`;
         let targetPage = pages[i];
 
-        // Create page if it doesn't exist
         if (!targetPage) {
           targetPage = await report.addPage(expectedPageName);
           pages = await report.getPages();
@@ -309,7 +389,6 @@ export default function PowerBIReport() {
 
         setStatus(`Preparing ${expectedPageName}...`);
 
-        // Switch to the page
         await new Promise<void>((resolve) => {
           const handler = () => {
             report.off("pageChanged", handler);
@@ -321,7 +400,6 @@ export default function PowerBIReport() {
 
         const page = await report.getActivePage();
 
-        // 🔥 STRICT RENAMING AFTER ACTIVATION (Forces "Page 1", "Page 2", etc.)
         if (page.displayName !== expectedPageName) {
           try {
             await page.rename(expectedPageName);
@@ -330,7 +408,6 @@ export default function PowerBIReport() {
           }
         }
 
-        // Clear existing visuals
         try {
           const existingVisuals = await page.getVisuals();
           for (const v of existingVisuals) {
@@ -346,22 +423,19 @@ export default function PowerBIReport() {
 
         await sleep(500);
 
-        // Track Y position so orphans can stack neatly instead of overlapping
         let currentOrphanY = 40;
 
-        // 4. Create Visuals
         for (const sheetName of config.worksheets) {
           const v = visualMap.get(sheetName);
           if (!v) continue;
 
-          // 🔥 RESET Y POSITION FOR ORPHANS SO THEY DON'T RENDER OFF SCREEN
           let finalX = v.layout.x;
           let finalY = v.layout.y;
 
           if (config.isOrphan) {
             finalX = 40;
             finalY = currentOrphanY;
-            currentOrphanY += v.layout.height + 20; // Add gap for next visual
+            currentOrphanY += v.layout.height + 20;
           }
 
           setStatus(`Creating ${v.visualType} on ${expectedPageName}...`);
@@ -384,7 +458,6 @@ export default function PowerBIReport() {
             }
             await sleep(200);
 
-            // Data binding
             const bindingEntries = Object.entries(v.bindings);
             for (const [semanticRole, data] of bindingEntries) {
               const technicalRole = mapRoleName(v.visualType, semanticRole);
@@ -436,7 +509,6 @@ export default function PowerBIReport() {
       setStatus("Dashboards and Visuals generated successfully!");
       setStatusType("success");
 
-      // ✅ DB UPDATE SUCCESS: Update the database to Completed
       if (currentJobId) {
         try {
           await fetch(`https://databasemanagement-e0e0d7bqhdg3gec7.eastus-01.azurewebsites.net/jobs/${currentJobId}`, {
@@ -444,7 +516,7 @@ export default function PowerBIReport() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               MigrationStatus: "Completed",
-              CompletedAt: new Date().toISOString(), // Gives us the end time for duration math
+              CompletedAt: new Date().toISOString(),
             }),
           });
         } catch (e) {
@@ -456,7 +528,6 @@ export default function PowerBIReport() {
       setStatus("Error: " + err.message);
       setStatusType("error");
 
-      // ❌ DB UPDATE FAILED: Update the database to Failed
       if (currentJobId) {
         try {
           await fetch(`https://databasemanagement-e0e0d7bqhdg3gec7.eastus-01.azurewebsites.net/jobs/${currentJobId}`, {
@@ -484,7 +555,6 @@ export default function PowerBIReport() {
     isEmbedding.current = true;
 
     async function init() {
-      /* ---- DEBUG: Log session data ---- */
       console.group("🔍 DEBUG: Session Data");
       console.log("workspaceId:", workspaceId);
       console.log("reportId:", reportId);
@@ -503,15 +573,14 @@ export default function PowerBIReport() {
         if (containerRef.current) {
           pbiService.reset(containerRef.current);
 
-          // 🚀 We build the URL manually now
           const builtEmbedUrl = `https://app.powerbi.com/reportEmbed?reportId=${reportId}&groupId=${workspaceId}`;
 
           const embedConfig = {
             type: "report",
             id: reportId,
-            embedUrl: builtEmbedUrl, // Added this line
-            accessToken: userToken, // Changed this line to use session storage token
-            tokenType: models.TokenType.Aad, // Changed this line to Aad
+            embedUrl: builtEmbedUrl,
+            accessToken: userToken,
+            tokenType: models.TokenType.Aad,
             permissions: models.Permissions.All,
             viewMode: models.ViewMode.Edit,
             settings: {
@@ -535,7 +604,6 @@ export default function PowerBIReport() {
 
           report = pbiService.embed(containerRef.current, embedConfig);
 
-          /* ---- DEBUG: Report lifecycle events ---- */
           report.on("loaded", () => {
             console.log("✅ DEBUG: Report 'loaded' event fired");
           });
@@ -575,7 +643,6 @@ export default function PowerBIReport() {
             console.log("⚡ DEBUG: commandTriggered event:", JSON.stringify(e, null, 2));
           });
 
-          /* ---- DEBUG: Intercept network for querydata failures ---- */
           const originalFetch = window.fetch;
           window.fetch = async function (...args: Parameters<typeof fetch>) {
             const url = typeof args[0] === "string" ? args[0] : (args[0] as Request).url;
@@ -701,51 +768,130 @@ export default function PowerBIReport() {
 
       {/* Schedule Refresh Dialog */}
       <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Schedule Refresh</DialogTitle>
             <DialogDescription>
-              Configure the refresh schedule for <strong>{rawReportName}</strong>
+              Configure refresh schedules for <strong>{rawReportName}</strong>
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-5 py-2">
-            {/* Enable/Disable Toggle */}
-            <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
+          <div className="space-y-6 py-2">
+            {/* ─── Single Toggle for Both ─── */}
+            <div className="flex items-center justify-between rounded-lg border p-4">
               <div className="space-y-1">
-                <span className="text-sm font-medium">Enable Scheduled Refresh</span>
+                <span className="text-sm font-semibold">Enable Scheduled Refresh</span>
                 <p className="text-xs text-muted-foreground">
-                  {scheduleEnabled ? "Refresh is active" : "Refresh is turned off"}
+                  {scheduleEnabled
+                    ? "Both Lakehouse and Semantic Model refresh are active"
+                    : "Scheduled refresh is off"}
                 </p>
               </div>
               <Switch checked={scheduleEnabled} onCheckedChange={setScheduleEnabled} />
             </div>
 
-            {/* Time Interval - only shown when enabled */}
             {scheduleEnabled && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Refresh Interval</label>
-                <Select value={refreshInterval} onValueChange={setRefreshInterval}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                     <SelectItem value="5">Every 5 minutes</SelectItem>
-                    <SelectItem value="10">Every 10 minutes</SelectItem>
-                    <SelectItem value="15">Every 15 minutes</SelectItem>
-                    <SelectItem value="30">Every 30 minutes</SelectItem>
-                    <SelectItem value="60">Every 1 hour</SelectItem>
-                    <SelectItem value="120">Every 2 hours</SelectItem>
-                    <SelectItem value="180">Every 3 hours</SelectItem>
-                    <SelectItem value="360">Every 6 hours</SelectItem>
-                    <SelectItem value="720">Every 12 hours</SelectItem>
-                    <SelectItem value="1440">Every 24 hours</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Runs every day at {Math.floor(24 * 60 / Number(refreshInterval))} time(s) per day (UTC).
-                </p>
-              </div>
+              <>
+                {/* ─── Lakehouse Interval ─── */}
+                <div className="space-y-3 rounded-lg border p-4">
+                  <span className="text-sm font-semibold">Lakehouse Refresh Interval</span>
+                  <Select value={lakehouseInterval} onValueChange={setLakehouseInterval}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">Every 5 minutes</SelectItem>
+                      <SelectItem value="10">Every 10 minutes</SelectItem>
+                      <SelectItem value="30">Every 30 minutes</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* ─── Semantic Model Schedule ─── */}
+                <div className="space-y-4 rounded-lg border p-4">
+                  <span className="text-sm font-semibold">Semantic Model Schedule</span>
+
+                  {/* Days selection */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Days</label>
+                    <div className="flex flex-wrap gap-2">
+                      {ALL_DAYS.map((day) => (
+                        <label key={day} className="flex items-center gap-1.5 cursor-pointer">
+                          <Checkbox checked={selectedDays.includes(day)} onCheckedChange={() => toggleDay(day)} />
+                          <span className="text-sm">{day.slice(0, 3)}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Time selection via dropdowns */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Add Time Slot (UTC)</label>
+                    <div className="flex items-center gap-2">
+                      <Select value={selectedHour} onValueChange={setSelectedHour}>
+                        <SelectTrigger className="w-24">
+                          <SelectValue placeholder="Hour" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0")).map((h) => (
+                            <SelectItem key={h} value={h}>
+                              {h}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <span className="text-sm font-medium">:</span>
+                      <Select value={selectedMinute} onValueChange={setSelectedMinute}>
+                        <SelectTrigger className="w-24">
+                          <SelectValue placeholder="Min" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="00">00</SelectItem>
+                          <SelectItem value="30">30</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          const time = `${selectedHour}:${selectedMinute}`;
+                          if (!selectedTimes.includes(time)) {
+                            setSelectedTimes((prev) => [...prev, time].sort());
+                          }
+                        }}
+                      >
+                        Add
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Selected time slots */}
+                  {selectedTimes.length > 0 && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Selected Time Slots</label>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedTimes.map((time) => (
+                          <span
+                            key={time}
+                            className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary"
+                          >
+                            {time}
+                            <button
+                              type="button"
+                              onClick={() => setSelectedTimes((prev) => prev.filter((t) => t !== time))}
+                              className="ml-1 rounded-full hover:bg-primary/20 p-0.5"
+                            >
+                              <XCircle className="h-3 w-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground">{selectedTimes.length} time slot(s) selected</p>
+                    </div>
+                  )}
+                </div>
+              </>
             )}
           </div>
 
