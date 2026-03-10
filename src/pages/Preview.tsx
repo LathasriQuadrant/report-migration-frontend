@@ -227,7 +227,7 @@ export default function PowerBIReport() {
     if (errors.length > 0) {
       toast({ title: "Refresh partially failed", description: errors.join("\n"), variant: "destructive" });
     } else {
-      toast({ title: "Refresh triggered", description: "Both semantic model and lakehouse refreshes started." });
+      toast({ title: "Successfully refreshed", description: "Both semantic model and lakehouse have been refreshed successfully." });
     }
     setRefreshing(false);
   };
