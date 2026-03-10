@@ -253,10 +253,7 @@ export default function Migration() {
         console.log("Lakehouse migration successful:", lakehouseData);
         sessionStorage.setItem("lakehouse_response", JSON.stringify(lakehouseData));
 
-        // 3b) Deploy semantic model (wait 5s before calling)
-        updateStep(2, "running", "Waiting before deploying semantic model…");
-        await delay(5000);
-
+        // 3b) Deploy semantic model
         updateStep(2, "running", "Deploying semantic model…");
         const parsedRaw = sessionStorage.getItem("parsed_workbook_data");
         const modelSchema = parsedRaw ? JSON.parse(parsedRaw) : {};

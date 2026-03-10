@@ -8,8 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import AppLayout from "@/components/layout/AppLayout";
 
@@ -53,14 +51,7 @@ export default function PowerBIReport() {
   const [refreshing, setRefreshing] = useState(false);
 
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
-  const [refreshInterval, setRefreshInterval] = useState("60"); // minutes for lakehouse
-
-  // Power BI schedule fields
-  const [scheduleDays, setScheduleDays] = useState<string[]>(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]);
-  const [scheduleTimes, setScheduleTimes] = useState<string[]>(["08:00"]);
-  const [newTime, setNewTime] = useState("08:00");
-  const [scheduleTimeZone, setScheduleTimeZone] = useState("UTC");
-  // notifyOption removed — backend forces "NoNotification" via Service Principal
+  const [refreshInterval, setRefreshInterval] = useState("60"); // minutes
 
   const isEmbedding = useRef(false);
   const executed = useRef(false);
@@ -75,109 +66,45 @@ export default function PowerBIReport() {
   const userToken = sessionStorage.getItem("access_token");
 
   const BACKEND_BASE_URL = "https://accesstokens-aecjbzaqaqcuh6bd.eastus-01.azurewebsites.net";
-  const LAKEHOUSE_BASE_URL = "https://live-data-lakehouse-erbghyatb6f4awgf.eastus-01.azurewebsites.net";
+
   const handleScheduleRefresh = async () => {
-    console.group("DEBUG: Schedule Refresh");
-
-    // Step 1: Validate required session values
-    console.log("Step 1 — Session values:", { datasetId, workspaceId });
-
-    if (!datasetId || !workspaceId) {
-      console.error("Step 1 FAIL: datasetId or workspaceId missing");
-      console.groupEnd();
-      toast({ title: "Missing data", description: "Dataset ID or Workspace ID not found.", variant: "destructive" });
+    if (!rawReportName) {
+      toast({ title: "Missing data", description: "Workbook name not found.", variant: "destructive" });
       return;
     }
 
     setScheduling(true);
     try {
-      // Step 2: Build payloads for both endpoints
-      // --- Power BI payload (flat — backend wraps in {value:...} and forces notifyOption) ---
-      const pbiPayload: Record<string, any> = {
-        enabled: scheduleEnabled,
-        times: scheduleTimes,
-        timeZone: scheduleTimeZone,
-      };
-      if (scheduleDays.length > 0) {
-        pbiPayload.days = scheduleDays;
-      }
-
-      // --- Lakehouse payload ---
-      const lakehousePayload = {
-        interval_minutes: parseInt(refreshInterval, 10) || 60,
+      const payload: Record<string, any> = {
         enable_scheduled_refresh: scheduleEnabled,
       };
+      if (scheduleEnabled) {
+        payload.interval_minutes = Number(refreshInterval);
+      }
 
-      const pbiUrl = `${BACKEND_BASE_URL}/datasets/${encodeURIComponent(datasetId)}/refresh-schedule?workspace_id=${encodeURIComponent(workspaceId)}`;
-      const lakehouseUrl = `${LAKEHOUSE_BASE_URL}/api/v1/lakehouse/refresh/${encodeURIComponent(rawReportName)}/schedule`;
-
-      console.log("Step 2 — Power BI URL:", pbiUrl);
-      console.log("Step 2 — Power BI Payload:", JSON.stringify(pbiPayload));
-      console.log("Step 2 — Lakehouse URL:", lakehouseUrl);
-      console.log("Step 2 — Lakehouse Payload:", JSON.stringify(lakehousePayload));
-
-      // Step 3: Fire both requests in parallel
-      console.log("Step 3 — Sending PATCH to both endpoints…");
-
-      const [pbiResult, lakehouseResult] = await Promise.allSettled([
-        fetch(pbiUrl, {
+      const res = await fetch(
+        `${BACKEND_BASE_URL}/refresh/${encodeURIComponent(rawReportName)}/schedule`,
+        {
           method: "PATCH",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(pbiPayload),
-        }),
-        fetch(lakehouseUrl, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(lakehousePayload),
-        }),
-      ]);
+          body: JSON.stringify(payload),
+        }
+      );
 
-      // Step 4: Trace Power BI response
-      let pbiOk = false;
-      if (pbiResult.status === "fulfilled") {
-        const pbiBody = await pbiResult.value.text();
-        console.log(`Step 4a — Power BI: ${pbiResult.value.status} ${pbiResult.value.statusText}`, pbiBody);
-        pbiOk = pbiResult.value.ok;
-        if (!pbiOk) console.error("Power BI returned non-OK:", pbiResult.value.status, pbiBody);
-      } else {
-        console.error("Step 4a — Power BI fetch failed:", pbiResult.reason);
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || `HTTP ${res.status}`);
       }
-
-      // Step 4b: Trace Lakehouse response
-      let lakehouseOk = false;
-      if (lakehouseResult.status === "fulfilled") {
-        const lhBody = await lakehouseResult.value.text();
-        console.log(`Step 4b — Lakehouse: ${lakehouseResult.value.status} ${lakehouseResult.value.statusText}`, lhBody);
-        lakehouseOk = lakehouseResult.value.ok;
-        if (!lakehouseOk) console.error("Lakehouse returned non-OK:", lakehouseResult.value.status, lhBody);
-      } else {
-        console.error("Step 4b — Lakehouse fetch failed:", lakehouseResult.reason);
-      }
-
-      // Step 5: Summary
-      if (!pbiOk && !lakehouseOk) {
-        throw new Error("Both Power BI and Lakehouse schedule requests failed. Check console for details.");
-      }
-
-      const parts: string[] = [];
-      if (pbiOk) parts.push(`Power BI: ${scheduleTimes.join(", ")} on ${scheduleDays.length > 0 ? scheduleDays.length + " day(s)" : "all days"}`);
-      if (lakehouseOk) parts.push(`Lakehouse: every ${refreshInterval} min`);
-      if (!pbiOk) parts.push("Power BI failed (see console)");
-      if (!lakehouseOk) parts.push("Lakehouse failed (see console)");
-
-      console.log("Step 5 — Done:", { pbiOk, lakehouseOk });
-      console.groupEnd();
 
       toast({
         title: scheduleEnabled ? "Schedule enabled" : "Schedule disabled",
-        description: scheduleEnabled ? parts.join(" | ") : "Scheduled refresh has been turned off.",
-        variant: (!pbiOk || !lakehouseOk) ? "destructive" : "default",
+        description: scheduleEnabled
+          ? `Refreshing every ${refreshInterval} minutes.`
+          : "Scheduled refresh has been turned off.",
       });
       setScheduleOpen(false);
     } catch (err: any) {
-      console.error("Schedule Refresh ERROR:", err);
-      console.groupEnd();
       toast({ title: "Schedule failed", description: err.message, variant: "destructive" });
     } finally {
       setScheduling(false);
@@ -192,7 +119,6 @@ export default function PowerBIReport() {
 
     setRefreshing(true);
     try {
-      // Hit the original dataset refresh endpoint
       const res = await fetch(
         `${BACKEND_BASE_URL}/datasets/${encodeURIComponent(datasetId)}/refresh?workspace_id=${encodeURIComponent(workspaceId)}`,
         {
@@ -205,23 +131,6 @@ export default function PowerBIReport() {
       if (!res.ok) {
         const errText = await res.text();
         throw new Error(errText || `HTTP ${res.status}`);
-      }
-
-      // Also hit the lakehouse refresh endpoint
-      if (rawReportName) {
-        const lakehouseRes = await fetch(
-          `${LAKEHOUSE_BASE_URL}/api/v1/lakehouse/refresh/${encodeURIComponent(rawReportName)}`,
-          {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-          }
-        );
-
-        if (!lakehouseRes.ok) {
-          const errText = await lakehouseRes.text();
-          console.warn("Lakehouse refresh warning:", errText);
-        }
       }
 
       toast({ title: "Refresh triggered", description: `Refresh started for dataset.` });
@@ -775,7 +684,7 @@ export default function PowerBIReport() {
           <div className="flex justify-end gap-2">
             <Button onClick={handleRefreshNow} disabled={refreshing} variant="outline" className="gap-2">
               <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-              {refreshing ? "Refreshing..." : "Refresh"}
+              {refreshing ? "Refreshing..." : "Refresh Now"}
             </Button>
             <Button onClick={() => setScheduleOpen(true)} className="gap-2">
               <Clock className="h-4 w-4" />
@@ -800,7 +709,7 @@ export default function PowerBIReport() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-5 py-2 max-h-[60vh] overflow-y-auto">
+          <div className="space-y-5 py-2">
             {/* Enable/Disable Toggle */}
             <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
               <div className="space-y-1">
@@ -812,167 +721,31 @@ export default function PowerBIReport() {
               <Switch checked={scheduleEnabled} onCheckedChange={setScheduleEnabled} />
             </div>
 
-            {/* All schedule options - only shown when enabled */}
+            {/* Time Interval - only shown when enabled */}
             {scheduleEnabled && (
-              <>
-                {/* Days of the week */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Refresh Days</label>
-                  <p className="text-xs text-muted-foreground">Leave empty for daily refresh</p>
-                  <div className="grid grid-cols-4 gap-2">
-                    {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day) => (
-                      <label key={day} className="flex items-center gap-2 text-sm cursor-pointer">
-                        <Checkbox
-                          checked={scheduleDays.includes(day)}
-                          onCheckedChange={(checked) => {
-                            setScheduleDays((prev) =>
-                              checked ? [...prev, day] : prev.filter((d) => d !== day)
-                            );
-                          }}
-                        />
-                        <span>{day.slice(0, 3)}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Refresh Times */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Refresh Times</label>
-                  <p className="text-xs text-muted-foreground">Select hour and minute (00 or 30) · Max 48/day (Premium) or 8/day</p>
-                  <div className="flex flex-wrap gap-2">
-                    {scheduleTimes.map((t) => (
-                      <span key={t} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-sm">
-                        {t}
-                        <button
-                          type="button"
-                          className="text-muted-foreground hover:text-foreground"
-                          onClick={() => setScheduleTimes((prev) => prev.filter((x) => x !== t))}
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Select
-                      value={newTime.split(":")[0] || ""}
-                      onValueChange={(h) => {
-                        const m = newTime.split(":")[1] || "00";
-                        setNewTime(`${h}:${m}`);
-                      }}
-                    >
-                      <SelectTrigger className="w-24">
-                        <SelectValue placeholder="Hour" />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-60">
-                        {Array.from({ length: 24 }, (_, i) => {
-                          const h = String(i).padStart(2, "0");
-                          return <SelectItem key={h} value={h}>{h}</SelectItem>;
-                        })}
-                      </SelectContent>
-                    </Select>
-                    <span className="text-sm font-medium">:</span>
-                    <Select
-                      value={newTime.split(":")[1] || "00"}
-                      onValueChange={(m) => {
-                        const h = newTime.split(":")[0] || "00";
-                        setNewTime(`${h}:${m}`);
-                      }}
-                    >
-                      <SelectTrigger className="w-24">
-                        <SelectValue placeholder="Min" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="00">00</SelectItem>
-                        <SelectItem value="30">30</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const time = newTime || "00:00";
-                        if (!scheduleTimes.includes(time)) {
-                          setScheduleTimes((prev) => [...prev, time].sort());
-                        }
-                      }}
-                    >
-                      Add
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Time Zone */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Time Zone</label>
-                  <Select value={scheduleTimeZone} onValueChange={setScheduleTimeZone}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="UTC">UTC</SelectItem>
-                      <SelectItem value="Eastern Standard Time">Eastern (US)</SelectItem>
-                      <SelectItem value="Central Standard Time">Central (US)</SelectItem>
-                      <SelectItem value="Mountain Standard Time">Mountain (US)</SelectItem>
-                      <SelectItem value="Pacific Standard Time">Pacific (US)</SelectItem>
-                      <SelectItem value="India Standard Time">India (IST)</SelectItem>
-                      <SelectItem value="GMT Standard Time">GMT</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Lakehouse Refresh Interval */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Lakehouse Refresh Interval</label>
-                  <p className="text-xs text-muted-foreground">How often the Lakehouse should refresh data</p>
-                  <Select
-                    value={["5","10","15","30","60","120","360","720","1440"].includes(refreshInterval) ? refreshInterval : "custom"}
-                    onValueChange={(val) => {
-                      if (val === "custom") {
-                        setRefreshInterval("");
-                      } else {
-                        setRefreshInterval(val);
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="w-48">
-                      <SelectValue placeholder="Select interval" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="5">5 min</SelectItem>
-                      <SelectItem value="10">10 min</SelectItem>
-                      <SelectItem value="15">15 min</SelectItem>
-                      <SelectItem value="30">30 min</SelectItem>
-                      <SelectItem value="60">1 hour</SelectItem>
-                      <SelectItem value="120">2 hours</SelectItem>
-                      <SelectItem value="360">6 hours</SelectItem>
-                      <SelectItem value="720">12 hours</SelectItem>
-                      <SelectItem value="1440">24 hours</SelectItem>
-                      <SelectItem value="custom">Custom...</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {!["5","10","15","30","60","120","360","720","1440"].includes(refreshInterval) && (
-                    <div className="flex items-center gap-2 mt-2">
-                      <Input
-                        type="number"
-                        min="1"
-                        value={refreshInterval}
-                        onChange={(e) => setRefreshInterval(e.target.value)}
-                        className="w-32"
-                        placeholder="Minutes"
-                      />
-                      <span className="text-sm text-muted-foreground">minutes</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Info note about notifications */}
-                <p className="text-xs text-muted-foreground italic">
-                  Notifications are managed by the service principal (NoNotification).
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Refresh Interval</label>
+                <Select value={refreshInterval} onValueChange={setRefreshInterval}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                     <SelectItem value="5">Every 5 minutes</SelectItem>
+                    <SelectItem value="10">Every 10 minutes</SelectItem>
+                    <SelectItem value="15">Every 15 minutes</SelectItem>
+                    <SelectItem value="30">Every 30 minutes</SelectItem>
+                    <SelectItem value="60">Every 1 hour</SelectItem>
+                    <SelectItem value="120">Every 2 hours</SelectItem>
+                    <SelectItem value="180">Every 3 hours</SelectItem>
+                    <SelectItem value="360">Every 6 hours</SelectItem>
+                    <SelectItem value="720">Every 12 hours</SelectItem>
+                    <SelectItem value="1440">Every 24 hours</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Runs every day at {Math.floor(24 * 60 / Number(refreshInterval))} time(s) per day (UTC).
                 </p>
-              </>
+              </div>
             )}
           </div>
 
