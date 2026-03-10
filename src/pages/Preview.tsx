@@ -6,7 +6,14 @@ import { Loader2, CheckCircle2, XCircle, Globe, AlertTriangle, ArrowLeft, Clock,
 
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -40,7 +47,6 @@ interface ApiVisual {
 }
 
 const ALL_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-
 
 export default function PowerBIReport() {
   const navigate = useNavigate();
@@ -83,11 +89,8 @@ export default function PowerBIReport() {
 
   /* ----------- DAY TOGGLE HELPER ----------- */
   const toggleDay = (day: string) => {
-    setSelectedDays((prev) =>
-      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
-    );
+    setSelectedDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
   };
-
 
   /* ----------- SCHEDULE REFRESH ----------- */
   const handleScheduleRefresh = async () => {
@@ -120,7 +123,7 @@ export default function PowerBIReport() {
           credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
-        }
+        },
       );
 
       if (!res.ok) {
@@ -152,7 +155,7 @@ export default function PowerBIReport() {
             credentials: "include",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(pbiPayload),
-          }
+          },
         );
 
         if (!res.ok) {
@@ -177,25 +180,56 @@ export default function PowerBIReport() {
   };
 
   /* ----------- REFRESH NOW ----------- */
-  const handleRefreshNow = () => {
+  const handleRefreshNow = async () => {
     if (!datasetId || !workspaceId) {
       toast({ title: "Missing data", description: "Dataset ID or Workspace ID not found.", variant: "destructive" });
       return;
     }
 
-    // Show success toast immediately
-    toast({ title: "Successfully refreshed", description: "Both semantic model and lakehouse have been refreshed successfully." });
+    setRefreshing(true);
+    const errors: string[] = [];
 
-    // Fire-and-forget: trigger both refreshes in the background
-    fetch(
-      `${BACKEND_BASE_URL}/datasets/${encodeURIComponent(datasetId)}/refresh?workspace_id=${encodeURIComponent(workspaceId)}`,
-      { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" } }
-    ).catch(() => {});
+    // 1. Power BI semantic model refresh
+    try {
+      const res = await fetch(
+        `${BACKEND_BASE_URL}/datasets/${encodeURIComponent(datasetId)}/refresh?workspace_id=${encodeURIComponent(workspaceId)}`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+        },
+      );
 
-    fetch(
-      `${BACKEND_BASE_URL}/api/v1/lakehouse/refresh/${encodeURIComponent(rawReportName)}`,
-      { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" } }
-    ).catch(() => {});
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || `HTTP ${res.status}`);
+      }
+    } catch (err: any) {
+      errors.push(`Semantic model: ${err.message}`);
+    }
+
+    // 2. Lakehouse refresh
+    try {
+      const res = await fetch(`${BACKEND_BASE_URL}/api/v1/lakehouse/refresh/${encodeURIComponent(rawReportName)}`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || `HTTP ${res.status}`);
+      }
+    } catch (err: any) {
+      errors.push(`Lakehouse: ${err.message}`);
+    }
+
+    if (errors.length > 0) {
+      toast({ title: "Refresh partially failed", description: errors.join("\n"), variant: "destructive" });
+    } else {
+      toast({ title: "Refresh triggered", description: "Both semantic model and lakehouse refreshes started." });
+    }
+    setRefreshing(false);
   };
 
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -265,6 +299,7 @@ export default function PowerBIReport() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ metadataBlobPath: metadataBlobUrl }),
           });
+          console.log(apiRes);
 
           if (apiRes.ok) {
             const data = await apiRes.json();
@@ -782,10 +817,7 @@ export default function PowerBIReport() {
                     <div className="flex flex-wrap gap-2">
                       {ALL_DAYS.map((day) => (
                         <label key={day} className="flex items-center gap-1.5 cursor-pointer">
-                          <Checkbox
-                            checked={selectedDays.includes(day)}
-                            onCheckedChange={() => toggleDay(day)}
-                          />
+                          <Checkbox checked={selectedDays.includes(day)} onCheckedChange={() => toggleDay(day)} />
                           <span className="text-sm">{day.slice(0, 3)}</span>
                         </label>
                       ))}
@@ -802,7 +834,9 @@ export default function PowerBIReport() {
                         </SelectTrigger>
                         <SelectContent>
                           {Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0")).map((h) => (
-                            <SelectItem key={h} value={h}>{h}</SelectItem>
+                            <SelectItem key={h} value={h}>
+                              {h}
+                            </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -853,9 +887,7 @@ export default function PowerBIReport() {
                           </span>
                         ))}
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        {selectedTimes.length} time slot(s) selected
-                      </p>
+                      <p className="text-xs text-muted-foreground">{selectedTimes.length} time slot(s) selected</p>
                     </div>
                   )}
                 </div>
