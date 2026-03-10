@@ -114,7 +114,7 @@ export default function PowerBIReport() {
 
       const LAKEHOUSE_BASE_URL = "https://live-data-lakehouse-erbghyatb6f4awgf.eastus-01.azurewebsites.net";
       const res = await fetch(
-        `${LAKEHOUSE_BASE_URL}/refresh/${encodeURIComponent(rawReportName)}/schedule`,
+        `${LAKEHOUSE_BASE_URL}/api/v1/lakehouse/refresh/${encodeURIComponent(rawReportName)}/schedule`,
         {
           method: "PATCH",
           credentials: "include",
