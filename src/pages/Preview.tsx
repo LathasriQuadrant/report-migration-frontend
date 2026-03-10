@@ -41,12 +41,6 @@ interface ApiVisual {
 
 const ALL_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
-// Generate time slots with only :00 and :30
-const TIME_SLOTS: string[] = [];
-for (let h = 0; h < 24; h++) {
-  const hh = String(h).padStart(2, "0");
-  TIME_SLOTS.push(`${hh}:00`, `${hh}:30`);
-}
 
 export default function PowerBIReport() {
   const navigate = useNavigate();
