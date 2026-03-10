@@ -102,10 +102,15 @@ export default function PowerBIReport() {
     // 1. Lakehouse schedule
     try {
       const interval = Number(lakehouseInterval);
-      if (!interval || interval < 5) {
-        throw new Error("Interval must be at least 5 minutes");
+      const payload: Record<string, any> = {
+        enable_scheduled_refresh: scheduleEnabled,
+      };
+      if (scheduleEnabled) {
+        if (!interval || interval < 5) {
+          throw new Error("Interval must be at least 5 minutes");
+        }
+        payload.interval_minutes = interval;
       }
-      const payload = { interval_minutes: interval };
 
       const LAKEHOUSE_BASE_URL = "https://live-data-lakehouse-erbghyatb6f4awgf.eastus-01.azurewebsites.net";
       const res = await fetch(
