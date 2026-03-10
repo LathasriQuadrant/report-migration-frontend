@@ -61,15 +61,16 @@ export default function PowerBIReport() {
   const [scheduling, setScheduling] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Lakehouse schedule state
-  const [lakehouseEnabled, setLakehouseEnabled] = useState(false);
+  // Single toggle for both Lakehouse + Semantic Model
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+
+  // Lakehouse interval
   const [lakehouseInterval, setLakehouseInterval] = useState("30");
-  const [customInterval, setCustomInterval] = useState("");
-  const [useCustomInterval, setUseCustomInterval] = useState(false);
 
   // Power BI schedule state
-  const [pbiEnabled, setPbiEnabled] = useState(false);
   const [selectedDays, setSelectedDays] = useState<string[]>(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]);
+  const [selectedHour, setSelectedHour] = useState("08");
+  const [selectedMinute, setSelectedMinute] = useState("00");
   const [selectedTimes, setSelectedTimes] = useState<string[]>(["08:00"]);
 
   const isEmbedding = useRef(false);
