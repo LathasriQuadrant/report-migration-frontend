@@ -59,7 +59,7 @@ export default function PowerBIReport() {
 
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduling, setScheduling] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  
 
   // Single toggle for both Lakehouse + Semantic Model
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
