@@ -469,6 +469,7 @@ export default function PowerBIReport() {
 
                 if (b && b.table && sanitizedCol) {
                   let bound = false;
+                  console.log(`🔗 Binding: role="${technicalRole}", table="${b.table}", column="${sanitizedCol}"`);
                   try {
                     await visual.addDataField(technicalRole, {
                       $schema: "http://powerbi.com/product/schema#column",
@@ -476,8 +477,9 @@ export default function PowerBIReport() {
                       column: sanitizedCol,
                     });
                     bound = true;
-                  } catch (e) {
-                    /* warn */
+                    console.log(`✅ Bound successfully: ${b.table}.${sanitizedCol} → ${technicalRole}`);
+                  } catch (e: any) {
+                    console.warn(`⚠️ Binding failed for ${b.table}.${sanitizedCol} → ${technicalRole}:`, e?.message || e);
                   }
 
                   if (!bound) {
@@ -490,11 +492,16 @@ export default function PowerBIReport() {
                           column: sanitizedCol,
                         });
                         bound = true;
+                        console.log(`✅ Fallback bound: ${fallbackTable}.${sanitizedCol} → ${technicalRole}`);
                         break;
-                      } catch (e) {
-                        /* continue */
+                      } catch (e: any) {
+                        console.warn(`⚠️ Fallback failed for ${fallbackTable}.${sanitizedCol}:`, e?.message || e);
                       }
                     }
+                  }
+
+                  if (!bound) {
+                    console.error(`❌ FAILED to bind column "${sanitizedCol}" (original: "${rawCol}") to any table. Tried: [${b.table}, ${uniqueFallbacks.join(', ')}]`);
                   }
                 }
               }
