@@ -5,6 +5,7 @@
     "": {
       "name": "vite_react_shadcn_ts",
       "dependencies": {
+        "@azure/msal-browser": "^3.27.0",
         "@azure/msal-react": "^2.1.1",
         "@hookform/resolvers": "^3.10.0",
         "@radix-ui/react-accordion": "^1.2.11",
@@ -83,9 +84,9 @@
   "packages": {
     "@alloc/quick-lru": ["@alloc/quick-lru@5.2.0", "", {}, "sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw=="],
 
-    "@azure/msal-browser": ["@azure/msal-browser@5.3.0", "", { "dependencies": { "@azure/msal-common": "16.1.0" } }, "sha512-WqIN2GJe6H8OfmEiXjf8y+N0LedO6lkE3JeLZqEVurvoHoHltpl3gMyfKPycAfOgNMMmlukB6XUhbXDRRSdhEQ=="],
+    "@azure/msal-browser": ["@azure/msal-browser@3.30.0", "", { "dependencies": { "@azure/msal-common": "14.16.1" } }, "sha512-I0XlIGVdM4E9kYP5eTjgW8fgATdzwxJvQ6bm2PNiHaZhEuUz47NYw1xHthC9R+lXz4i9zbShS0VdLyxd7n0GGA=="],
 
-    "@azure/msal-common": ["@azure/msal-common@16.1.0", "", {}, "sha512-uiX0ChrRFbreXlPlDR8LwHKmZpJudDAr124iNWJKJ+b7MJUWXmvVU3idSi/c5lk1FwLVZeMxhQir3BGdV09I+g=="],
+    "@azure/msal-common": ["@azure/msal-common@14.16.1", "", {}, "sha512-nyxsA6NA4SVKh5YyRpbSXiMr7oQbwark7JU9LMeg6tJYTSPyAGkdx61wPT4gyxZfxlSxMMEyAsWaubBlNyIa1w=="],
 
     "@azure/msal-react": ["@azure/msal-react@2.2.0", "", { "peerDependencies": { "@azure/msal-browser": "^3.27.0", "react": "^16.8.0 || ^17 || ^18" } }, "sha512-2V+9JXeXyyjYNF92y5u0tU4el9px/V1+vkRuN+DtoxyiMHCtYQpJoaFdGWArh43zhz5aqQqiGW/iajPDSu3QsQ=="],
 
